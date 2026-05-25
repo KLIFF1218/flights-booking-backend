@@ -9,14 +9,21 @@ generator client {
 model User {
   id String @id @default(cuid())
 
-  email    String? @unique
-  password String?
+  email     String? @unique
+  password  String?
   firstName String?
-  lastName String?
-  vkId     String? @unique
-  
+  lastName  String?
+  vkId      String? @unique
+
   status UserStatus @default(ACTIVE)
-  phone     String?
+  phone  String?
+
+  country     String?
+  citizenship String?
+
+  city String?
+
+  currency Currency @default(RUB)
 
   role Role @default(USER)
 
@@ -70,24 +77,297 @@ model RefreshToken {
   @@index([expiresAt])
 }
 
+model AirportAlias {
+  id String @id @default(cuid())
+
+  airportId String
+  airport   Airport @relation(fields: [airportId], references: [id], onDelete: Cascade)
+
+  name String
+  lang String?
+
+  @@index([name])
+  @@index([airportId])
+}
+
 model Airport {
   id String @id @default(cuid())
 
-  name String
-  city String?
+  name    String
+  city    String?
   country String
 
-  iataCode String? @unique @db.VarChar(3)
+  aliases AirportAlias[]
+
+  iataCode String  @unique @db.VarChar(3)
   icaoCode String? @db.VarChar(4)
 
   latitude  Float?
   longitude Float?
+
+  // relations
+  departingFlights Flight[] @relation("DepartureAirport")
+  arrivingFlights  Flight[] @relation("ArrivalAirport")
+
+  departingSegments FlightSegment[] @relation("SegmentDeparture")
+  arrivingSegments  FlightSegment[] @relation("SegmentArrival")
 
   createdAt DateTime @default(now())
 
   @@index([iataCode])
   @@index([city])
   @@index([name])
+}
+
+model Airline {
+  id String @id @default(cuid())
+
+  code String @unique
+  name String
+
+  aircrafts Aircraft[]
+
+  flights Flight[]
+
+  createdAt DateTime @default(now())
+}
+
+model Aircraft {
+  id String @id @default(cuid())
+
+  code String  @unique
+  name String?
+
+  airlineId String
+  airline   Airline @relation(fields: [airlineId], references: [id])
+
+  segments        FlightSegment[]
+  flightInstances FlightInstance[]
+  aircraftLayout  AircraftLayout?
+}
+
+model Flight {
+  id String @id @default(cuid())
+
+  airlineId String
+  airline   Airline @relation(fields: [airlineId], references: [id])
+
+  flightNumber String
+
+  departureAirportId String
+  departureAirport   Airport @relation("DepartureAirport", fields: [departureAirportId], references: [id])
+
+  arrivalAirportId String
+  arrivalAirport   Airport @relation("ArrivalAirport", fields: [arrivalAirportId], references: [id])
+
+  durationMinutes Int
+
+  segments  FlightSegment[]
+  instances FlightInstance[]
+
+  createdAt DateTime @default(now())
+
+  @@index([departureAirportId, arrivalAirportId])
+  @@index([arrivalAirportId])
+}
+
+model FlightSegment {
+  id String @id @default(cuid())
+
+  flightId String
+  flight   Flight @relation(fields: [flightId], references: [id], onDelete: Cascade)
+
+  segmentOrder Int
+
+  departureAirportId String
+  departureAirport   Airport @relation("SegmentDeparture", fields: [departureAirportId], references: [id])
+
+  arrivalAirportId String
+  arrivalAirport   Airport @relation("SegmentArrival", fields: [arrivalAirportId], references: [id])
+
+  departureTime DateTime
+  arrivalTime   DateTime
+
+  carrierCode  String
+  flightNumber String
+
+  aircraftId String?
+  aircraft   Aircraft? @relation(fields: [aircraftId], references: [id])
+
+  durationMinutes Int
+
+  createdAt DateTime @default(now())
+
+  seatAssignments SeatAssignment[] // ← ДОБАВИТЬ
+  seatHolds       SeatHold[]
+
+  @@index([flightId, segmentOrder])
+}
+
+model FlightInstance {
+  id String @id @default(cuid())
+
+  flightId String
+  flight   Flight @relation(fields: [flightId], references: [id])
+
+  aircraftId String?
+  aircraft   Aircraft? @relation(fields: [aircraftId], references: [id])
+
+  departureDate DateTime
+
+  originalDepartureDate DateTime?
+
+  delayMinutes Int @default(0)
+
+  status FlightStatus @default(SCHEDULED)
+
+  seatsAvailable Int
+
+  seats FlightSeat[]
+
+  fares FlightFare[]
+
+  createdAt DateTime  @default(now())
+  bookings  Booking[]
+
+  @@index([departureDate, flightId])
+}
+
+model FlightFare {
+  id String @id @default(cuid())
+
+  flightInstance   FlightInstance @relation(fields: [flightInstanceId], references: [id], onDelete: Cascade)
+  flightInstanceId String
+
+  passengerType PassengerType
+
+  travelClass TravelClass
+
+  basePrice Decimal
+
+  currency Currency
+
+  checkedBags Int @default(0)
+
+  fareBasis String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([flightInstanceId, passengerType, travelClass])
+}
+
+model AircraftLayout {
+  id String @id @default(cuid())
+
+  aircraftId String   @unique
+  aircraft   Aircraft @relation(fields: [aircraftId], references: [id])
+
+  width  Int
+  length Int
+
+  seats      SeatTemplate[]
+  facilities FacilityTemplate[]
+}
+
+model SeatTemplate {
+  id       String         @id @default(cuid())
+  layoutId String
+  layout   AircraftLayout @relation(fields: [layoutId], references: [id])
+
+  number String
+
+  x Int
+  y Int
+
+  seatType String? // WINDOW, AISLE
+  deck     Int
+}
+
+model FacilityTemplate {
+  id       String         @id @default(cuid())
+  layoutId String
+  layout   AircraftLayout @relation(fields: [layoutId], references: [id])
+
+  code String // LA, BK, GAL
+
+  x Int
+  y Int
+}
+
+model FlightSeat {
+  id String @id @default(cuid())
+
+  flightInstanceId String
+  flightInstance   FlightInstance @relation(fields: [flightInstanceId], references: [id], onDelete: Cascade)
+
+  seatNumber String
+
+  x    Int
+  y    Int
+  deck Int
+
+  seatType        String?
+  seatAssignments SeatAssignment[]
+
+  price Decimal @default(0)
+
+  status SeatStatus @default(AVAILABLE)
+
+  bookingId String?
+  booking   Booking? @relation(fields: [bookingId], references: [id])
+
+  createdAt DateTime   @default(now())
+  seatHolds SeatHold[]
+
+  @@unique([flightInstanceId, seatNumber])
+}
+
+model SeatHold {
+  id String @id @default(cuid())
+
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  flightSeatId String
+  seat         FlightSeat @relation(fields: [flightSeatId], references: [id])
+
+  segmentId String
+  segment   FlightSegment @relation(fields: [segmentId], references: [id])
+
+  travelerId String
+  traveler   Traveler @relation(fields: [travelerId], references: [id])
+
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
+
+  @@unique([flightSeatId, segmentId])
+  @@index([expiresAt])
+}
+
+model Ticket {
+  id String @id @default(cuid())
+
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  ticketNumber String @unique
+
+  travelerId String   @unique
+  traveler   Traveler @relation(fields: [travelerId], references: [id], onDelete: Cascade)
+
+  pdfKey String
+
+  status TicketStatus @default(ISSUED)
+
+  issuedAt DateTime @default(now())
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([bookingId, travelerId])
 }
 
 model Booking {
@@ -100,7 +380,10 @@ model Booking {
 
   status BookingStatus @default(PNR_CREATED)
 
-  ticketUrl String?
+  travelers       Traveler[]
+  seatAssignments SeatAssignment[]
+
+  tickets Ticket[]
 
   pnrLocator    String @unique
   flightOrderId String
@@ -115,12 +398,83 @@ model Booking {
 
   transaction Transaction?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  flightInstanceId String?
+  flightInstance   FlightInstance? @relation(fields: [flightInstanceId], references: [id])
+
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  flightSeats FlightSeat[]
+  seatHolds   SeatHold[]
 
   @@index([pnrLocator])
   @@index([flightOrderId])
   @@index([status])
+}
+
+model Traveler {
+  id String @id @default(cuid())
+
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  firstName String
+  lastName  String
+
+  gender    String
+  birthDate DateTime
+
+  nationality String
+  birthPlace  String?
+
+  passportNumber       String
+  passportIssuanceDate DateTime
+  passportExpiry       DateTime
+
+  email            String?
+  phoneCountryCode String?
+  phoneNumber      String?
+
+  passengerType PassengerType
+
+  basePrice Decimal
+  currency  Currency
+
+  travelClass TravelClass
+
+  fareBasis String?
+
+  checkedBags Int @default(0)
+
+  ticket Ticket?
+
+  seatAssignments SeatAssignment[]
+
+  seatHolds SeatHold[]
+
+  createdAt DateTime @default(now())
+
+  @@index([bookingId])
+}
+
+model SeatAssignment {
+  id String @id @default(cuid())
+
+  travelerId String
+  traveler   Traveler @relation(fields: [travelerId], references: [id])
+
+  flightSeatId String
+  seat         FlightSeat @relation(fields: [flightSeatId], references: [id])
+
+  segmentId String
+  segment   FlightSegment @relation(fields: [segmentId], references: [id])
+
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([travelerId, segmentId])
+  @@unique([flightSeatId, segmentId])
 }
 
 model Transaction {
@@ -156,8 +510,36 @@ enum UserStatus {
   INACTIVE
 }
 
+enum SeatStatus {
+  AVAILABLE
+  RESERVED
+  BOOKED
+  BLOCKED
+}
+
+enum FlightStatus {
+  SCHEDULED
+  DELAYED
+  CANCELLED
+  COMPLETED
+}
+
+enum TravelClass {
+  ECONOMY
+  PREMIUM_ECONOMY
+  BUSINESS
+  FIRST
+}
+
+enum PassengerType {
+  ADULT
+  CHILD
+  HELD_INFANT
+}
+
 enum BookingProvider {
   AMADEUS
+  MOCK
 }
 
 enum BookingStatus {
@@ -190,6 +572,12 @@ enum PaymentProvider {
   YOOKASSA
   STRIPE
   STARS
+}
+
+enum TicketStatus {
+  ISSUED
+  VOIDED
+  REFUNDED
 }
 
 enum Role {
