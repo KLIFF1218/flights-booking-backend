@@ -104,6 +104,14 @@ export interface Segment {
 }
 
 export interface TravelerPricing {
+  travelerId?: string;
+  fareOption?: string;
+  travelerType?: string;
+  price?: {
+    currency: string;
+    total: string;
+    base: string;
+  };
   fareDetailsBySegment?: FareDetailsBySegment[];
 }
 
