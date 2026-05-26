@@ -1,4 +1,4 @@
-import { TransactionStatus } from '@prisma/client';
+import { type TransactionStatus } from '@prisma/client';
 
 export interface PaymentWebhookResult {
   transactionId: string;

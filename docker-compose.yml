@@ -1,18 +1,25 @@
 services:
   app:
     container_name: flights-app-dev
-    env_file:
-      - .env
     build:
       context: .
       dockerfile: Dockerfile
-      target: dev
-    command: pnpm start:dev
+      target: development
+      cache_from:
+        - type=registry,ref=type=gha
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
     ports:
       - '3001:3001'
     volumes:
-      - .:/usr/src/app
-      - /usr/src/app/node_modules
+      - ./src:/app/src
+      - ./prisma:/app/prisma
+      - /app/node_modules
+      - /app/dist
     depends_on:
       postgres:
         condition: service_healthy
@@ -21,97 +28,149 @@ services:
     restart: unless-stopped
     networks:
       - backend
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (res) => { if (res.statusCode !== 200) throw new Error() })"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   postgres:
-    image: postgres:16
+    image: postgres:16-alpine
     container_name: flights-postgres-dev
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=en_US.UTF-8
     ports:
       - '5433:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER}']
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
+    restart: unless-stopped
     networks:
       - backend
+    security_opt:
+      - no-new-privileges:true
 
   redis:
-    image: redis:7
+    image: redis:7-alpine
     container_name: flights-redis-dev
-    command: ["redis-server", "--appendonly", "yes"]
-
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --requirepass ${REDIS_PASSWORD}
     ports:
       - '6379:6379'
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5
+      start_period: 10s
+    restart: unless-stopped
     networks:
       - backend
+    security_opt:
+      - no-new-privileges:true
 
   postgres-exporter:
-    image: prometheuscommunity/postgres-exporter
+    image: prometheuscommunity/postgres-exporter:latest
     container_name: postgres-exporter
-    restart: unless-stopped
     environment:
       DATA_SOURCE_NAME: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
     ports:
       - '9187:9187'
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
     networks:
       - backend
+    security_opt:
+      - no-new-privileges:true
 
   redis-exporter:
-    image: oliver006/redis_exporter
+    image: oliver006/redis_exporter:latest
     container_name: redis-exporter
-    restart: unless-stopped
     command:
       - --redis.addr=redis://:${REDIS_PASSWORD}@redis:6379
     ports:
       - '9121:9121'
     depends_on:
-      - redis
-    networks:
-      - backend
-
-  node-exporter:
-    image: prom/node-exporter
-    container_name: node-exporter
+      redis:
+        condition: service_healthy
     restart: unless-stopped
-    ports:
-      - '9100:9100'
     networks:
       - backend
+    security_opt:
+      - no-new-privileges:true
 
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
-    restart: unless-stopped
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
     ports:
       - '9090:9090'
     depends_on:
+      - app
       - postgres-exporter
       - redis-exporter
-      - node-exporter
+    restart: unless-stopped
     networks:
       - backend
+    security_opt:
+      - no-new-privileges:true
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: grafana-dev
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_SERVER_ROOT_URL: "%(protocol)s://%(domain)s:%(http_port)s/"  
+      GF_AUTH_ANONYMOUS_ENABLED: 'false'
+    ports:
+      - '3002:3000'
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - backend
+    security_opt:
+      - no-new-privileges:true
 
 networks:
   backend:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
 
 volumes:
   postgres_data:
   redis_data:
+  prometheus_data:
+  grafana_data:

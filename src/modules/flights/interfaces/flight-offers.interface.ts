@@ -62,9 +62,19 @@ export interface FlightOffer {
   price: {
     total: string;
     currency: string;
+    base?: string;
+    grandTotal?: string;
+    fees?: any[];
   };
 
   itineraries: Itinerary[];
+
+  oneWay?: boolean;
+  lastTicketingDate?: string;
+  source?: string;
+  instantTicketingRequired?: boolean;
+  nonHomogeneous?: boolean;
+  type?: string;
 
   travelerPricings?: TravelerPricing[];
 }

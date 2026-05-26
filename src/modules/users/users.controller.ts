@@ -1,18 +1,29 @@
-import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
 import { UsersService } from './users.service';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiParam,
-  ApiBody,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody } from '@nestjs/swagger';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UserResponseDto } from './dto/user-response.dto';
+import { Protected, Authorized } from 'src/common/decorators';
+import type { User } from '@prisma/client';
+import { UpdateSettingsDto } from './dto/update-settings.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { Roles } from 'src/common/decorators';
+import { Role } from '@prisma/client';
+
 @ApiTags('Users')
-@Controller('users')
+@Protected()
+@Roles(Role.USER, Role.ADMIN)
+@Controller({ path: 'users', version: '1' })
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  @Get('me')
+  @ApiOperation({ summary: 'Получить данные текущего пользователя' })
+  @ApiResponse({ status: 200, type: UserResponseDto })
+  @ApiResponse({ status: 401, description: 'Не авторизован' })
+  async getMe(@Authorized('id') userId: string) {
+    return this.usersService.getById(userId);
+  }
 
   @Get()
   @ApiOperation({ summary: 'Получить список всех пользователей' })
@@ -20,6 +31,16 @@ export class UsersController {
   async getAll() {
     const users = await this.usersService.getAll();
     return { data: users };
+  }
+
+  @Patch('profile')
+  updateProfile(@Authorized('id') userId: string, @Body() dto: UpdateProfileDto) {
+    return this.usersService.updateProfile(userId, dto);
+  }
+
+  @Get('settings')
+  getSettings(@Authorized('id') userId: string) {
+    return this.usersService.getSettings(userId);
   }
 
   @Get(':id')
@@ -30,8 +51,6 @@ export class UsersController {
   async getById(@Param('id') id: string) {
     return this.usersService.getById(id);
   }
-
-  // поменять чтобы пароль не возращало даже хэш!!!
 
   @Post()
   @ApiOperation({ summary: 'Создать нового пользователя' })
@@ -48,5 +67,10 @@ export class UsersController {
   @ApiResponse({ status: 404, description: 'Пользователь не найден' })
   async remove(@Param('id') id: string) {
     return this.usersService.remove(id);
+  }
+
+  @Patch('settings')
+  updateSettings(@Authorized('id') userId: string, @Body() dto: UpdateSettingsDto) {
+    return this.usersService.updateSettings(userId, dto);
   }
 }
