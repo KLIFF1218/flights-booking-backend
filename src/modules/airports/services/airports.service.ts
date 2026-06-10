@@ -1,79 +1,76 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
-import { PrismaService } from 'src/infra/db/prisma/prisma.service';
-import { Logger } from 'nestjs-pino';
+import { BadRequestException, Injectable } from '@nestjs/common';
 
-interface AirportLocation {
-  id: string;
-  name: string;
-  city: string | null;
-  country: string;
-  iataCode: string | null;
-}
+import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 
 @Injectable()
 export class AirportsService {
-  private airportCache: AirportLocation[] | null = null;
+  constructor(private readonly prisma: PrismaService) {}
 
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly logger: Logger,
-  ) {}
-
-  async searchAirports(keyword: string) {
-    if (!keyword || keyword.length < 2) {
+  async searchAirports(query: string) {
+    if (!query || query.trim().length < 2) {
       throw new BadRequestException('Keyword must be at least 2 characters');
     }
 
-    const normalizedKeyword = keyword.trim().toLowerCase();
-    const airports = await this.loadAirports();
+    const q = query.trim().toLowerCase();
 
-    const results = airports
-      .filter((airport) => {
-        const name = airport.name.toLowerCase();
-        const city = airport.city?.toLowerCase() ?? '';
-        const iata = airport.iataCode?.toLowerCase() ?? '';
+    const airports = await this.prisma.airport.findMany({
+      where: {
+        OR: [
+          {
+            iataCode: {
+              startsWith: q.toUpperCase(),
+            },
+          },
+          {
+            name: {
+              contains: q,
+              mode: 'insensitive',
+            },
+          },
+          {
+            city: {
+              contains: q,
+              mode: 'insensitive',
+            },
+          },
+          {
+            country: {
+              contains: q,
+              mode: 'insensitive',
+            },
+          },
+          {
+            aliases: {
+              some: {
+                name: {
+                  contains: q,
+                  mode: 'insensitive',
+                },
+              },
+            },
+          },
+        ],
+      },
 
-        return (
-          name.includes(normalizedKeyword) ||
-          city.includes(normalizedKeyword) ||
-          iata.startsWith(normalizedKeyword)
-        );
-      })
-      .slice(0, 10);
+      select: {
+        id: true,
+        name: true,
+        city: true,
+        country: true,
+        iataCode: true,
+        icaoCode: true,
+        latitude: true,
+        longitude: true,
+      },
+
+      take: 10,
+    });
 
     return {
-      data: results,
+      data: airports,
       meta: {
-        count: results.length,
+        count: airports.length,
       },
     };
-  }
-
-  private async loadAirports(): Promise<AirportLocation[]> {
-    if (this.airportCache) {
-      return this.airportCache;
-    }
-
-    try {
-      this.airportCache = await this.prisma.airport.findMany({
-        select: {
-          id: true,
-          name: true,
-          city: true,
-          country: true,
-          iataCode: true,
-        },
-        orderBy: {
-          name: 'asc',
-        },
-      });
-
-      return this.airportCache;
-    } catch (error) {
-      this.logger.error('Failed to load airport cache', {
-        message: error.message,
-      });
-      throw error;
-    }
   }
 }
