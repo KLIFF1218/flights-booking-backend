@@ -1,14 +1,15 @@
 import { Module } from '@nestjs/common';
-import { FlightsService } from './flights.service';
-import { FlightsController } from './flights.controller';
+import { FlightsService } from './services/flights.service';
+import { FlightsController } from './controllers/flights.controller';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { RedisModule } from 'src/redis/redis.module';
-import { AmadeusService } from './amadeus.service';
-import { FlightsPricingService } from './flight-pricing.service';
-import { FlightPricingController } from './flight-pricing.controller';
-import { FlightsSearchStore } from './flights-cache.service';
-import { AmadeusAuthService } from '../../infra/http/amadeus/amadeus-auth.service';
-import { AmadeusHttpClient } from 'src/infra/http/amadeus/amadeus-http-client.service';
+import { FlightsPricingService } from './services/flight-pricing.service';
+import { FlightPricingController } from './controllers/flight-pricing.controller';
+import { FlightsSearchStore } from './services/flights-cache.service';
+import { MetricsService } from '../../infra/metrics/metrics.service';
+import { FLIGHT_SEARCH_PROVIDER } from './providers/flight-search.provider';
+import { DbFlightsSearchProvider } from './services/db-flight-search.service';
+import { DbPricingProvider } from './services/DbPricingProvider.service';
 
 @Module({
   imports: [RedisModule],
@@ -16,13 +17,16 @@ import { AmadeusHttpClient } from 'src/infra/http/amadeus/amadeus-http-client.se
   providers: [
     FlightsService,
     PrismaService,
-    AmadeusService,
+    DbFlightsSearchProvider,
     FlightsPricingService,
     FlightsSearchStore,
-    AmadeusAuthService,
-    AmadeusHttpClient,
-    FlightsSearchStore,
+    MetricsService,
+    DbPricingProvider,
+    {
+      provide: FLIGHT_SEARCH_PROVIDER,
+      useClass: DbFlightsSearchProvider,
+    },
   ],
-  exports: [AmadeusService, AmadeusHttpClient, FlightsSearchStore],
+  exports: [FlightsSearchStore, FLIGHT_SEARCH_PROVIDER, DbPricingProvider],
 })
 export class FlightsModule {}
