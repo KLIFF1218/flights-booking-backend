@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { YoomoneyService } from './yoomoney.service';
+import { YookassaProvider } from './yoomoney.service';
 import { YookassaModule } from 'nestjs-yookassa';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { getYookassaConfig } from 'src/config/yookassa.config';
@@ -12,7 +12,7 @@ import { getYookassaConfig } from 'src/config/yookassa.config';
       inject: [ConfigService],
     }),
   ],
-  providers: [YoomoneyService],
-  exports: [YoomoneyService],
+  providers: [YookassaProvider],
+  exports: [YookassaProvider],
 })
 export class YoomoneyModule {}
