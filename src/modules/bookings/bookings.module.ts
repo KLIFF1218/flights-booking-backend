@@ -1,14 +1,18 @@
 import { Module } from '@nestjs/common';
-import { BookingsService } from './bookings.service';
-import { BookingsController } from './bookings.controller';
+import { BookingsService } from './services/bookings.service';
+import { BookingTicketController } from './controllers/booking.ticket.controller';
 import { PaymentsModule } from '../payment/payment.module';
-import { FlightBookingController } from './flight.booking.controller';
-import { FlightBookingService } from './flight.booking.service';
+import { FlightBookingController } from './controllers/flight.booking.controller';
+import { FlightBookingService } from './services/flight.booking.service';
 import { FlightsModule } from '../flights/flights.module';
+import { MockBookingService } from './services/mock-booking.service';
+import { S3Module } from 'src/infra/storage/s3.module';
+import { BookingsCacheService } from './services/bookings-cache.service';
+import { RedisModule } from 'src/redis/redis.module';
 
 @Module({
-  imports: [PaymentsModule, FlightsModule],
-  controllers: [BookingsController, FlightBookingController],
-  providers: [BookingsService, FlightBookingService],
+  imports: [PaymentsModule, FlightsModule, S3Module, RedisModule],
+  controllers: [FlightBookingController, BookingTicketController],
+  providers: [BookingsService, FlightBookingService, MockBookingService, BookingsCacheService],
 })
 export class BookingsModule {}
