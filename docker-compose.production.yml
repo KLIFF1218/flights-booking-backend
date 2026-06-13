@@ -1,6 +1,6 @@
 services:
   app:
-    image: ghcr.io/YOUR_GITHUB_USERNAME/flights-app:${APP_VERSION:-latest}
+    image: ghcr.io/${GITHUB_REPOSITORY:-KLIFF1218/flights-app}:${APP_VERSION:-latest}
     container_name: flights-app-prod
     environment:
       NODE_ENV: production
