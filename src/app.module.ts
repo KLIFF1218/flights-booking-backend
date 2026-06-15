@@ -6,7 +6,6 @@ import { LoggerModule } from 'nestjs-pino';
 import { SentryModule, SentryGlobalFilter } from '@sentry/nestjs/setup';
 import { BullModule } from '@nestjs/bullmq';
 
-
 import { FlightsModule } from './modules/flights/flights.module';
 import { BookingsModule } from './modules/bookings/bookings.module';
 import { PaymentsModule } from './modules/payment/payment.module';
@@ -17,6 +16,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { InfraModule } from './infra/infra.module';
 import { MailModule } from './infra/mail/mail.module';
 import { RedisModule } from './redis/redis.module';
+import { HealthModule } from './health/health.module';
 import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 
 import { RateLimitGuard } from './common/guards/rate-limit.guard';
@@ -30,6 +30,13 @@ import { UsersModule } from './modules/users/users.module';
 import { AdminBookingsModule } from './modules/admin/admin-bookings/admin-bookings.module';
 import { AdminPaymentsModule } from './modules/admin/admin-payments/admin-payments.module';
 import { AdminDashboardModule } from './modules/admin/admin-dashboard/admin-dashboard.module';
+import { SchedulerModule } from './modules/scheduler/scheduler.module';
+import { AdminFlightsModule } from './modules/admin/admin-flights/admin-flights.module';
+import { AdminAirportsModule } from './modules/admin/admin-airports/admin-airports.module';
+import { AircraftsModule } from './modules/aircrafts/aircrafts.module';
+import { AirlinesModule } from './modules/airlines/airlines.module';
+import { MetricsModule } from './metrics/metrics.module';
+import { RabbitmqModule } from './infra/rabbitmq/rabbitmq.module';
 
 @Module({
   imports: [
@@ -71,14 +78,18 @@ import { AdminDashboardModule } from './modules/admin/admin-dashboard/admin-dash
 
     InfraModule,
     RedisModule,
+    RabbitmqModule,
     MailModule,
+    SchedulerModule,
+    HealthModule,
 
-    PrometheusModule.register({
-      path: '/metrics',
-      defaultMetrics: {
-        enabled: true,
-      },
-    }),
+    // PrometheusModule.register({
+    //   path: '/metrics',
+    //   defaultMetrics: {
+    //     enabled: true,
+    //   },
+    // }),
+    MetricsModule,
 
     BullModule.forRootAsync({
       inject: [ConfigService],
@@ -105,6 +116,10 @@ import { AdminDashboardModule } from './modules/admin/admin-dashboard/admin-dash
     AdminBookingsModule,
     AdminPaymentsModule,
     AdminDashboardModule,
+    AdminFlightsModule,
+    AdminAirportsModule,
+    AircraftsModule,
+    AirlinesModule,
   ],
 
   providers: [
