@@ -10,13 +10,21 @@ export class MailService {
     private readonly logger: Logger,
   ) {}
 
-  async sendBookingSuccess(user: { email: string }, bookingId: string, pdfUrl: string) {
+  async sendBookingSuccess(
+    user: { email: string },
+    bookingId: string,
+    tickets: {
+      travelerId: string;
+      ticketNumber: string;
+      downloadUrl: string;
+    }[],
+  ) {
     await this.queue.add(
       'send-booking-success',
       {
         email: user.email,
         bookingId,
-        pdfUrl,
+        tickets,
       },
       {
         jobId: `mail:booking-success:${bookingId}`,
@@ -28,8 +36,6 @@ export class MailService {
         },
       },
     );
-
-    this.logger.log({ bookingId }, 'Booking success email enqueued with attachment');
   }
 
   async sendBookingFailed(user: { email: string }, bookingId: string) {
