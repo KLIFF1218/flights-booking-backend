@@ -1,4 +1,5 @@
-import { IsOptional, IsString } from "class-validator";
+import { Currency } from '@prisma/client';
+import { IsEnum, IsOptional, IsString } from 'class-validator';
 
 export class UpdateSettingsDto {
   @IsOptional()
@@ -10,8 +11,8 @@ export class UpdateSettingsDto {
   citizenship?: string;
 
   @IsOptional()
-  @IsString()
-  currency?: string;
+  @IsEnum(Currency)
+  currency?: Currency;
 
   @IsOptional()
   @IsString()
