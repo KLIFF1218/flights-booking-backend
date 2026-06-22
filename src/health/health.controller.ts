@@ -5,10 +5,12 @@ import {
   HealthIndicatorService,
   PrismaHealthIndicator,
 } from '@nestjs/terminus';
+import { ApiTags, ApiOperation, ApiOkResponse } from '@nestjs/swagger';
 
 import { PrismaService } from '../infra/db/prisma/prisma.service';
 import { RedisHealthIndicator } from './redis.health-indicator';
 
+@ApiTags('Health')
 @Controller({
   path: 'health',
   version: VERSION_NEUTRAL,
