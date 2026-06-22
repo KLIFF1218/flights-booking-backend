@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam, ApiBody, ApiUnauthorizedResponse, ApiForbiddenResponse, ApiOkResponse } from '@nestjs/swagger';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UserResponseDto } from './dto/user-response.dto';
 import { Protected, Authorized } from 'src/common/decorators';
@@ -11,6 +11,7 @@ import { Roles } from 'src/common/decorators';
 import { Role } from '@prisma/client';
 
 @ApiTags('Users')
+@ApiBearerAuth()
 @Protected()
 @Roles(Role.USER, Role.ADMIN)
 @Controller({ path: 'users', version: '1' })
@@ -34,11 +35,20 @@ export class UsersController {
   }
 
   @Patch('profile')
+  @ApiOperation({ summary: 'Обновить профиль пользователя' })
+  @ApiBody({ type: UpdateProfileDto })
+  @ApiOkResponse({ description: 'Профиль обновлён' })
+  @ApiUnauthorizedResponse({ description: 'Требуется аутентификация' })
+  @ApiForbiddenResponse({ description: 'Требуется роль USER или ADMIN' })
   updateProfile(@Authorized('id') userId: string, @Body() dto: UpdateProfileDto) {
     return this.usersService.updateProfile(userId, dto);
   }
 
   @Get('settings')
+  @ApiOperation({ summary: 'Получить настройки пользователя' })
+  @ApiOkResponse({ description: 'Настройки пользователя получены' })
+  @ApiUnauthorizedResponse({ description: 'Требуется аутентификация' })
+  @ApiForbiddenResponse({ description: 'Требуется роль USER или ADMIN' })
   getSettings(@Authorized('id') userId: string) {
     return this.usersService.getSettings(userId);
   }
