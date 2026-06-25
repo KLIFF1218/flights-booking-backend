@@ -1,29 +1,36 @@
 import { IsArray, IsString, IsNotEmpty, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ApiProperty } from '@nestjs/swagger';
 
 export class AssignSeatDto {
   @IsString()
   @IsNotEmpty()
-  travelerId: string;
+  @ApiProperty({ example: 'trav_1' })
+  travelerId!: string;
 
   @IsString()
   @IsNotEmpty()
-  segmentId: string;
+  @ApiProperty({ example: 'seg_1' })
+  segmentId!: string;
 
   @IsString()
   @IsNotEmpty()
-  seatNumber: string;
+  @ApiProperty({ example: '12A' })
+  seatNumber!: string;
 }
 
 export class AddSeatsDto {
   @IsString()
-  searchId: string;
+  @ApiProperty({ example: 'search_123' })
+  searchId!: string;
 
   @IsString()
-  offerId: string;
+  @ApiProperty({ example: 'offer_1' })
+  offerId!: string;
 
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => AssignSeatDto)
-  seats: AssignSeatDto[];
+  @ApiProperty({ type: [AssignSeatDto] })
+  seats!: AssignSeatDto[];
 }
