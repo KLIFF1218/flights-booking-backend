@@ -7,39 +7,39 @@ export class BookingResponse {
     example: 'clu3y9ab0002qz0q2yex8w9s0',
     description: 'ID брони',
   })
-  id: string;
+  id!: string;
 
   @ApiProperty({
     example: 'BK-2025-abcdef12',
     description: 'Номер бронирования',
   })
-  bookingNumber: string | null;
+  bookingNumber!: string | null;
 
   @ApiProperty({ example: 'John', description: 'Имя пассажира' })
-  passengerName: string;
+  passengerName!: string;
 
   @ApiProperty({ example: 'Doe', description: 'Фамилия пассажира' })
-  passengerLastName: string;
+  passengerLastName!: string;
 
   @ApiProperty({
     example: 'john.doe@example.com',
     description: 'Email пассажира',
   })
-  passengerEmail: string;
+  passengerEmail!: string;
 
   @ApiProperty({ example: 'BUSINESS', description: 'Класс перелёта' })
-  tripClass: string;
+  tripClass!: string;
 
   @ApiProperty({ example: 2, description: 'Количество мест' })
-  seats: number;
+  seats!: number;
 
-  status: BookingStatus;
-
-  @ApiProperty({ example: '2025-11-13T09:15:00.000Z' })
-  createdAt: Date;
+  status!: BookingStatus;
 
   @ApiProperty({ example: '2025-11-13T09:15:00.000Z' })
-  updatedAt: Date;
+  createdAt!: Date;
+
+  @ApiProperty({ example: '2025-11-13T09:15:00.000Z' })
+  updatedAt!: Date;
 
   @ApiProperty({
     type: () => TransactionResponseDto,
