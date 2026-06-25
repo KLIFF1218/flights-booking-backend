@@ -3,10 +3,10 @@ import { WebhookService } from './webhook.service';
 import { WebhookController } from './webhook.controller';
 import { YoomoneyModule } from '../providers/yoomoney/yoomoney.module';
 import { PaymentsModule } from '../payment.module';
-import { PaymentHandler } from '../payment.handler';
+import { StripeModule } from '../providers/stripe/stripe.module';
 
 @Module({
-  imports: [YoomoneyModule, forwardRef(() => PaymentsModule)],
+  imports: [YoomoneyModule, StripeModule, forwardRef(() => PaymentsModule)],
   controllers: [WebhookController],
   providers: [WebhookService],
 })
