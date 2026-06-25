@@ -8,6 +8,8 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
   constructor(private readonly logger: Logger) {
     const adapter = new PrismaPg({
       connectionString: process.env.DATABASE_URL,
+      connectionTimeoutMillis: 5000,
+      idleTimeoutMillis: 300000,
     });
 
     super({
@@ -21,7 +23,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
 
   async onModuleInit() {
     this.logger.log('Connecting to database...');
-    await this.$connect()
+    await this.$connect();
     this.logger.log('Database connected');
   }
 }
