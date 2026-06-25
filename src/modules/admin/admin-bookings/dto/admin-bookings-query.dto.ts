@@ -11,7 +11,11 @@ export class AdminBookingsQueryDto {
 
   @IsOptional()
   @IsEnum(BookingStatus)
-  @ApiPropertyOptional({ example: 'CONFIRMED', enum: BookingStatus, description: 'Статус бронирования для фильтрации' })
+  @ApiPropertyOptional({
+    example: 'CONFIRMED',
+    enum: BookingStatus,
+    description: 'Статус бронирования для фильтрации',
+  })
   status?: BookingStatus;
 
   @IsOptional()
