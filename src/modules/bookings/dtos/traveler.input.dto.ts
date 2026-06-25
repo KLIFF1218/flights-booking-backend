@@ -1,5 +1,5 @@
-
 import { IsDateString, IsEnum, IsString } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
 
 export enum Gender {
   MALE = 'MALE',
@@ -8,38 +8,50 @@ export enum Gender {
 
 export class TravelerInputDto {
   @IsString()
-  firstName: string;
+  @ApiProperty({ example: 'Ivan' })
+  firstName!: string;
 
   @IsString()
-  lastName: string;
+  @ApiProperty({ example: 'Ivanov' })
+  lastName!: string;
 
   @IsEnum(Gender)
-  gender: Gender;
+  @ApiProperty({ example: Gender.MALE, enum: Gender })
+  gender!: Gender;
 
   @IsDateString()
-  dateOfBirth: string;
+  @ApiProperty({ example: '1990-01-01' })
+  dateOfBirth!: string;
 
   @IsString()
-  email: string;
+  @ApiProperty({ example: 'ivan@example.com' })
+  email!: string;
 
   @IsString()
-  phoneCountryCode: string;
+  @ApiProperty({ example: '+7' })
+  phoneCountryCode!: string;
 
   @IsString()
-  phoneNumber: string;
+  @ApiProperty({ example: '9261234567' })
+  phoneNumber!: string;
 
   @IsString()
-  passportNumber: string;
+  @ApiProperty({ example: '1234567890' })
+  passportNumber!: string;
 
   @IsDateString()
-  passportIssuanceDate: string;
+  @ApiProperty({ example: '2015-01-01' })
+  passportIssuanceDate!: string;
 
   @IsDateString()
-  passportExpiry: string;
+  @ApiProperty({ example: '2025-01-01' })
+  passportExpiry!: string;
 
   @IsString()
-  birthPlace: string;
+  @ApiProperty({ example: 'Moscow' })
+  birthPlace!: string;
 
   @IsString()
-  nationality: string;
+  @ApiProperty({ example: 'RU' })
+  nationality!: string;
 }
