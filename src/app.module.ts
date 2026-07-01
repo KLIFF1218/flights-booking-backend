@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { APP_GUARD, APP_FILTER } from '@nestjs/core';
+import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 
 import { LoggerModule } from 'nestjs-pino';
 import { SentryModule, SentryGlobalFilter } from '@sentry/nestjs/setup';
@@ -21,6 +21,7 @@ import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 
 import { RateLimitGuard } from './common/guards/rate-limit.guard';
 import { RateLimiterService } from './infra/rate-limiter/rate-limiter-redis.service';
+import { MetricsInterceptor } from './common/interceptors/metrics.interceptor';
 
 import { isDev } from './common/utils';
 import { TicketingModule } from './modules/ticketing/ticketing.module';
@@ -37,6 +38,8 @@ import { AircraftsModule } from './modules/aircrafts/aircrafts.module';
 import { AirlinesModule } from './modules/airlines/airlines.module';
 import { MetricsModule } from './metrics/metrics.module';
 import { RabbitmqModule } from './infra/rabbitmq/rabbitmq.module';
+import { KafkaModule } from './infra/kafka/kafka.module';
+import { OutboxModule } from './infra/outbox/outbox.module';
 
 @Module({
   imports: [
@@ -80,8 +83,11 @@ import { RabbitmqModule } from './infra/rabbitmq/rabbitmq.module';
     RedisModule,
     RabbitmqModule,
     MailModule,
+    KafkaModule,
     SchedulerModule,
     HealthModule,
+
+    OutboxModule,
 
     // PrometheusModule.register({
     //   path: '/metrics',
@@ -126,6 +132,10 @@ import { RabbitmqModule } from './infra/rabbitmq/rabbitmq.module';
     {
       provide: APP_FILTER,
       useClass: SentryGlobalFilter,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: MetricsInterceptor,
     },
     RateLimiterService,
     {
