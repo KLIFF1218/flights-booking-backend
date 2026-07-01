@@ -29,6 +29,7 @@ export interface FlightOffer {
   lastTicketingDate: string;
   itineraries?: unknown[];
   price?: FlightPrice;
+  travelerPricings?: TravelerPricing[];
 }
 
 export interface FlightPrice {
@@ -37,4 +38,19 @@ export interface FlightPrice {
   base?: string;
   grandTotal?: string;
   billingCurrency?: string;
+}
+
+export interface TravelerPricing {
+  travelerType?: string;
+  price?: {
+    currency?: string;
+    total?: string;
+    base?: string;
+  };
+  fareDetailsBySegment?: FareDetailsBySegment[];
+}
+
+export interface FareDetailsBySegment {
+  cabin?: string;
+  fareBasis?: string;
 }
