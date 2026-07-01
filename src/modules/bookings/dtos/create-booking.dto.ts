@@ -8,6 +8,7 @@ import {
   IsOptional,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PaymentProvider } from '@prisma/client';
 import type { FlightOrderData } from './flight-order-booking-response.type';
 import { TravelerInputDto } from './traveler.input.dto';
@@ -15,20 +16,24 @@ import { TravelerInputDto } from './traveler.input.dto';
 export class CreateBookingDto {
   @IsString()
   @IsNotEmpty()
-  userId: string;
+  @ApiProperty({ example: 'usr_1' })
+  userId!: string;
 
   @IsObject()
   @IsNotEmpty()
   @ValidateNested()
   @Type(() => Object)
-  flightOrder: FlightOrderData;
+  @ApiProperty({ description: 'Данные заказа, полученные от поставщика', example: {} })
+  flightOrder!: FlightOrderData;
 
   @IsEnum(PaymentProvider)
-  paymentProvider: PaymentProvider;
+  @ApiProperty({ example: 'YOOKASSA' })
+  paymentProvider!: PaymentProvider;
 
   @IsArray()
   @IsOptional()
   @ValidateNested({ each: true })
   @Type(() => TravelerInputDto)
+  @ApiPropertyOptional({ type: [TravelerInputDto] })
   travelers?: TravelerInputDto[];
 }
