@@ -17,10 +17,11 @@ import { JwtPayload } from '../interfaces';
 import { User } from '@prisma/client';
 import { Logger } from 'nestjs-pino';
 import { UsersService } from 'src/modules/users/users.service';
-import axios from 'axios';
+import { MetricsService } from '../../../infra/metrics/metrics.service';
+import { TokenService } from './token.service';
+import { RefreshService } from './refresh.service';
+import { SocialService } from './social.service';
 import { VkIdAuthDto } from '../dtos/vk-id.auth.dto';
-import { ExchangeVkTokensInterface } from '../interfaces/exchange-vk-tokens.interface';
-import crypto from 'crypto';
 
 @Injectable()
 export class AuthService {
@@ -39,6 +40,10 @@ export class AuthService {
     private readonly config: ConfigService,
     private readonly logger: Logger,
     private readonly usersService: UsersService,
+    private readonly metrics: MetricsService,
+    private readonly tokenService: TokenService,
+    private readonly refreshService: RefreshService,
+    private readonly socialService: SocialService,
   ) {
     this.ACCESS_EXPIRES = ms(config.getOrThrow<ms.StringValue>('JWT_EXPIRES_ACCESS_TOKEN'));
     this.REFRESH_EXPIRES = ms(config.getOrThrow<ms.StringValue>('JWT_EXPIRES_REFRESH_TOKEN'));
@@ -67,6 +72,10 @@ export class AuthService {
       },
     });
 
+    try {
+      this.metrics.recordLogin('register');
+    } catch {}
+
     return this.issueTokens(user, req, res);
   }
 
@@ -76,66 +85,30 @@ export class AuthService {
     });
 
     if (!user?.password) {
+      try {
+        this.metrics.recordLoginFailure('password', 'no_password');
+      } catch {}
       throw new UnauthorizedException('Неверный логин или пароль');
     }
 
     const valid = await verify(user.password, dto.password);
     if (!valid) {
+      try {
+        this.metrics.recordLoginFailure('password', 'invalid_credentials');
+      } catch {}
+
       throw new UnauthorizedException('Неверный логин или пароль');
     }
+
+    try {
+      this.metrics.recordLogin('password');
+    } catch {}
 
     return this.issueTokens(user, req, res);
   }
 
   async refresh(req: Request, res: Response) {
-    const refreshToken = req.cookies?.refreshToken;
-    if (!refreshToken) {
-      throw new UnauthorizedException('Refresh token отсутствует');
-    }
-
-    let payload: JwtPayload;
-    try {
-      payload = this.jwt.verify(refreshToken);
-    } catch {
-      throw new UnauthorizedException('Refresh token невалиден');
-    }
-
-    const activeTokens = await this.prisma.refreshToken.findMany({
-      where: {
-        userId: payload.id,
-        revokedAt: null,
-        expiresAt: { gt: new Date() },
-      },
-    });
-
-    const matched = await this.findRefreshToken(activeTokens, refreshToken);
-
-    if (!matched) {
-      await this.prisma.refreshToken.updateMany({
-        where: { userId: payload.id },
-        data: { revokedAt: new Date() },
-      });
-
-      throw new UnauthorizedException('Обнаружено повторное использование refresh token');
-    }
-
-    await this.prisma.refreshToken.update({
-      where: { id: matched.id },
-      data: { revokedAt: new Date() },
-    });
-
-    const user = await this.usersService.getById(payload.id);
-    if (!user) {
-      throw new NotFoundException('Пользователь не найден');
-    }
-    const tokens = await this.generateTokens(user, req);
-
-    this.setRefreshCookie(res, tokens.refreshToken, tokens.refreshMaxAge);
-
-    return {
-      accessToken: tokens.accessToken,
-      accessMaxAge: tokens.accessMaxAge,
-    };
+    return this.refreshService.refresh(req, res);
   }
 
   /* ========================== LOGOUT ========================== */
@@ -148,8 +121,10 @@ export class AuthService {
       return;
     }
 
+    const user = req.user;
+
     const tokens = await this.prisma.refreshToken.findMany({
-      where: { revokedAt: null },
+      where: { userId: user.id, revokedAt: null },
     });
 
     for (const token of tokens) {
@@ -182,125 +157,12 @@ export class AuthService {
 
   /* ========================== VK AUTH ========================== */
 
-  async exchangeVkCode(dto: VkIdAuthDto): Promise<ExchangeVkTokensInterface> {
-    try {
-      const { data } = await axios.post<ExchangeVkTokensInterface>(
-        'https://id.vk.ru/oauth2/auth',
-        new URLSearchParams({
-          grant_type: this.VK_GRANT_TYPE,
-          client_id: this.VK_CLIENT_ID,
-          client_secret: this.VK_CLIENT_SECRET,
-          redirect_uri: this.VK_REDIRECT_URI,
-          code: dto.code,
-          device_id: dto.device_id,
-          code_verifier: dto.code_verifier,
-        }).toString(),
-        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
-      );
-
-      return data;
-    } catch (e: any) {
-      this.logger.error(e?.response?.data, 'VK exchange failed');
-      this.logger.error('error: ', e);
-      throw new UnauthorizedException('VK authorization failed');
-    }
-  }
-
   async vkExchange(dto: VkIdAuthDto, req: Request, res: Response) {
-    const vkTokens = await this.exchangeVkCode(dto);
-
-    if (!vkTokens.access_token || !vkTokens.user_id) {
-      throw new UnauthorizedException('VK tokens are invalid');
-    }
-
-    let userInfo: any;
-
-    try {
-      const { data } = await axios.get('https://id.vk.ru/oauth2/user_info', {
-        params: {
-          client_id: this.VK_CLIENT_ID,
-        },
-        headers: {
-          Authorization: `Bearer ${vkTokens.access_token}`,
-        },
-      });
-
-      userInfo = data.user;
-    } catch (e: any) {
-      this.logger.error(e?.response?.data, 'VK userInfo failed');
-      throw new UnauthorizedException('Failed to fetch VK user info');
-    }
-
-    const vkId = String(vkTokens.user_id);
-    const email = userInfo?.email ?? null;
-    const firstName = userInfo?.first_name ?? null;
-    const lastName = userInfo?.last_name ?? null;
-
-    let user = await this.prisma.user.findUnique({
-      where: { vkId },
-    });
-
-    if (user) {
-      const updateData: any = {};
-
-      if (!user.firstName && firstName) updateData.firstName = firstName;
-      if (!user.lastName && lastName) updateData.lastName = lastName;
-      if (!user.email && email) updateData.email = email;
-
-      if (Object.keys(updateData).length > 0) {
-        user = await this.prisma.user.update({
-          where: { id: user.id },
-          data: updateData,
-        });
-      }
-
-      return this.issueTokens(user, req, res);
-    }
-
-    if (email) {
-      const existingByEmail = await this.prisma.user.findUnique({
-        where: { email },
-      });
-
-      if (existingByEmail) {
-        const updateData: any = {
-          vkId,
-        };
-
-        if (!existingByEmail.firstName && firstName) updateData.firstName = firstName;
-
-        if (!existingByEmail.lastName && lastName) updateData.lastName = lastName;
-
-        user = await this.prisma.user.update({
-          where: { id: existingByEmail.id },
-          data: updateData,
-        });
-
-        return this.issueTokens(user, req, res);
-      }
-    }
-
-    user = await this.prisma.user.create({
-      data: {
-        vkId,
-        email,
-        firstName,
-        lastName,
-      },
-    });
-
-    return this.issueTokens(user, req, res);
+    return this.socialService.vkExchange(dto, req, res);
   }
-
 
   private async issueTokens(user: User, req: Request, res: Response) {
-    const tokens = await this.generateTokens(user, req);
-    this.setRefreshCookie(res, tokens.refreshToken, tokens.refreshMaxAge);
-
-    return {
-      accessToken: tokens.accessToken,
-      accessMaxAge: tokens.accessMaxAge,
-    };
+    return this.tokenService.issueTokens(user, req, res);
   }
 
   private async generateTokens(user: User, req: Request) {
@@ -342,6 +204,11 @@ export class AuthService {
       },
     });
 
+    try {
+      this.metrics.recordAuthTokenDuration(this.ACCESS_EXPIRES / 1000, 'access');
+      this.metrics.recordAuthTokenDuration(this.REFRESH_EXPIRES / 1000, 'refresh');
+    } catch {}
+
     return {
       accessToken,
       refreshToken,
@@ -351,22 +218,10 @@ export class AuthService {
   }
 
   private setRefreshCookie(res: Response, token: string, maxAge: number) {
-    res.cookie('refreshToken', token, {
-      httpOnly: true,
-      secure: !isDev,
-      sameSite: 'lax',
-      path: '/',
-      maxAge,
-      ...(IS_DEV_NODE ? {} : { domain: this.COOKIE_DOMAIN }),
-    });
+    this.tokenService.setRefreshCookie(res, token, maxAge);
   }
 
   private async findRefreshToken(tokens: any[], token: string) {
-    for (const t of tokens) {
-      if (await verify(t.tokenHash, token)) {
-        return t;
-      }
-    }
-    return null;
+    return this.tokenService.findRefreshToken(tokens, token);
   }
 }
