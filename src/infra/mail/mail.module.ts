@@ -5,6 +5,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { getMailerConfig } from 'src/config/mailer.config';
 import { BullModule } from '@nestjs/bullmq';
 import { MailProcessor } from './mail.processor';
+import { MetricsModule } from 'src/metrics/metrics.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { MailProcessor } from './mail.processor';
         removeOnFail: false,
       },
     }),
+    MetricsModule,
   ],
   providers: [MailService, MailProcessor],
   exports: [MailService],
