@@ -6,111 +6,111 @@ export class BookingDetailDto {
     example: 'clu3y9ab0002qz0q2yex8w9s0',
     description: 'ID бронирования',
   })
-  id: string;
+  id!: string;
 
   @ApiProperty({
     example: 'cmlkwumde0000rou70qi84z9d',
     description: 'ID пользователя',
   })
-  userId: string;
+  userId!: string;
 
   @ApiProperty({
     example: 'ABC123',
     description: 'PNR локатор (подтверждение от авиакомпании)',
   })
-  pnrLocator: string;
+  pnrLocator!: string;
 
   @ApiProperty({
     example: '2025-01-20',
     description: 'ID рейса',
   })
-  flightOrderId: string;
+  flightOrderId!: string;
 
   @ApiProperty({
     enum: BookingStatus,
     example: BookingStatus.PNR_CREATED,
     description: 'Статус бронирования',
   })
-  status: BookingStatus;
+  status!: BookingStatus;
 
   @ApiProperty({
     example: 350.5,
     description: 'Общая стоимость',
   })
-  totalPrice: number;
+  totalPrice!: number;
 
   @ApiProperty({
     enum: Currency,
     example: Currency.USD,
     description: 'Валюта',
   })
-  currency: Currency;
+  currency!: Currency;
 
   @ApiProperty({
     example: 'AMADEUS',
     description: 'Провайдер (откуда забронировано)',
   })
-  provider: string;
+  provider!: string;
 
   @ApiProperty({
     example: '2025-12-25T23:59:59.000Z',
     description: 'Последний день выписки билета',
   })
-  lastTicketingDate: Date;
+  lastTicketingDate!: Date;
 
   @ApiProperty({
     example: '2025-12-25T23:59:59.000Z',
     description: 'Дата истечения бронирования',
   })
-  expiresAt: Date;
+  expiresAt!: Date;
 
   @ApiProperty({
     example: '2025-02-23T10:30:00.000Z',
     description: 'Дата создания',
   })
-  createdAt: Date;
+  createdAt!: Date;
 
   @ApiProperty({
     example: '2025-02-23T10:30:00.000Z',
     description: 'Дата последнего обновления',
   })
-  updatedAt: Date;
+  updatedAt!: Date;
 
   @ApiProperty({
     example: 'John Doe',
     description: 'ФИ пассажира',
   })
-  passengerName: string;
+  passengerName!: string;
 
   @ApiProperty({
     example: 'SVO',
     description: 'IATA код аэропорта отправления',
   })
-  departureAirport: string;
+  departureAirport!: string;
 
   @ApiProperty({
     example: '2025-03-15T14:30:00Z',
     description: 'Время отправления',
   })
-  departureTime: string;
+  departureTime!: string;
 
   @ApiProperty({
     example: 'JFK',
     description: 'IATA код аэропорта прибытия',
   })
-  arrivalAirport: string;
+  arrivalAirport!: string;
 
   @ApiProperty({
     example: '2025-03-15T20:30:00Z',
     description: 'Время прибытия',
   })
-  arrivalTime: string;
+  arrivalTime!: string;
 
   @ApiProperty({
     example: 'ECONOMY',
     description: 'Класс кабины',
   })
-  cabin: string;
+  cabin!: string;
 
   @ApiProperty({
     example: '12A',
@@ -139,11 +139,11 @@ export class UserBookingsListDto {
     type: [BookingDetailDto],
     description: 'Список бронирований пользователя',
   })
-  bookings: BookingDetailDto[];
+  bookings!: BookingDetailDto[];
 
   @ApiProperty({
     example: 5,
     description: 'Количество бронирований',
   })
-  total: number;
+  total!: number;
 }
