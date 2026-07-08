@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { RedisService } from 'src/redis/redis.service';
+import { RedisService } from 'src/infra/redis/redis.service';
 
 const DEFAULT_TTL_SECONDS = 30 * 60;
 
