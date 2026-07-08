@@ -8,7 +8,7 @@ export class RegisterDto {
   })
   @IsNotEmpty({ message: 'Поле email обязательно' })
   @IsEmail({}, { message: 'Некорректный формат email' })
-  email: string;
+  email!: string;
 
   @ApiProperty({
     example: 'StrongPass123!',
@@ -19,19 +19,19 @@ export class RegisterDto {
   @IsString()
   @MinLength(8, { message: 'Пароль должен содержать не меньше 8 символов' })
   @MaxLength(128, { message: 'Пароль должен содержать не больше 128 символов' })
-  password: string;
+  password!: string;
 
   @ApiProperty({
     example: 'John',
     description: 'Имя пользователя',
   })
   @IsString()
-  firstName: string;
+  firstName!: string;
 
   @ApiProperty({
     example: 'Doe',
     description: 'Фамилия пользователя',
   })
   @IsString()
-  lastName: string;
+  lastName!: string;
 }
