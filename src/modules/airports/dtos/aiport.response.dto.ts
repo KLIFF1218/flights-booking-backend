@@ -1,16 +1,31 @@
+import { ApiProperty } from '@nestjs/swagger';
+
 export class AirportLocationDto {
-  id: string;
-  name: string;
-  city: string | null;
-  country: string;
-  iataCode: string | null;
+  @ApiProperty({ example: 'airport_1' })
+  id!: string;
+
+  @ApiProperty({ example: 'Sheremetyevo' })
+  name!: string;
+
+  @ApiProperty({ example: 'Moscow', required: false })
+  city!: string | null;
+
+  @ApiProperty({ example: 'Russia' })
+  country!: string;
+
+  @ApiProperty({ example: 'SVO', required: false })
+  iataCode!: string | null;
 }
 
 export class AirportsMetaDto {
-  count: number;
+  @ApiProperty({ example: 120 })
+  count!: number;
 }
 
 export class AirportsResponseDto {
-  data: AirportLocationDto[];
-  meta: AirportsMetaDto;
+  @ApiProperty({ type: [AirportLocationDto] })
+  data!: AirportLocationDto[];
+
+  @ApiProperty({ type: AirportsMetaDto })
+  meta!: AirportsMetaDto;
 }
