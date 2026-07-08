@@ -21,25 +21,25 @@ export enum DocumentType {
 export class NameInputDto {
   @IsString()
   @ApiProperty({ example: 'Ivan' })
-  firstName: string;
+  firstName!: string;
 
   @IsString()
   @ApiProperty({ example: 'Ivanov' })
-  lastName: string;
+  lastName!: string;
 }
 
 export class PhoneInputDto {
   @IsEnum(['MOBILE', 'LANDLINE'])
   @ApiProperty({ example: 'MOBILE' })
-  deviceType: 'MOBILE' | 'LANDLINE';
+  deviceType!: 'MOBILE' | 'LANDLINE';
 
   @IsString()
   @ApiProperty({ example: '+7' })
-  countryCallingCode: string;
+  countryCallingCode!: string;
 
   @IsString()
   @ApiProperty({ example: '9261234567' })
-  number: string;
+  number!: string;
 }
 
 export class TravelerContactInputDto {
@@ -52,72 +52,72 @@ export class TravelerContactInputDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => PhoneInputDto)
-  // @ApiPropertyOptional({ type: [PhoneInputDto] })
+  @ApiPropertyOptional({ type: [PhoneInputDto] })
   phones?: PhoneInputDto[];
 }
 
 export class TravelerDocumentInputDto {
   @IsEnum(DocumentType)
-  // @ApiProperty({ example: DocumentType.PASSPORT })
-  documentType: DocumentType;
+  @ApiProperty({ example: DocumentType.PASSPORT })
+  documentType!: DocumentType;
 
   @IsString()
   @Length(3, 20)
   @ApiProperty({ example: '1234567890' })
-  number: string;
+  number!: string;
 
   @IsDateString()
   @ApiProperty({ example: '2025-01-01' })
-  expiryDate: string;
+  expiryDate!: string;
 
   @IsDateString()
   @ApiProperty({ example: '2015-01-01' })
-  issuanceDate: string;
+  issuanceDate!: string;
 
   @IsString()
   @Length(2, 2)
   @ApiProperty({ example: 'RU' })
-  issuanceCountry: string;
+  issuanceCountry!: string;
 
   @IsString()
   @ApiProperty({ example: 'Moscow' })
-  birthPlace: string;
+  birthPlace!: string;
 
   @IsString()
   @Length(2, 2)
   @ApiProperty({ example: 'RU' })
-  nationality: string;
+  nationality!: string;
 }
 
 export class TravelerInputDto {
   @IsString()
   @ApiProperty({ example: 'trav_1' })
-  id: string;
+  id!: string;
 
   @IsDateString()
   @ApiProperty({ example: '1990-01-01' })
-  dateOfBirth: string;
+  dateOfBirth!: string;
 
   @IsEnum(['MALE', 'FEMALE'])
   @ApiProperty({ example: 'MALE' })
-  gender: 'MALE' | 'FEMALE';
+  gender!: 'MALE' | 'FEMALE';
 
   @ValidateNested()
   @Type(() => NameInputDto)
-  // @ApiProperty({ type: NameInputDto })
-  name: NameInputDto;
+  @ApiProperty({ type: NameInputDto })
+  name!: NameInputDto;
 
   @IsOptional()
   @ValidateNested()
   @Type(() => TravelerContactInputDto)
-  // @ApiPropertyOptional({ type: TravelerContactInputDto })
+  @ApiPropertyOptional({ type: TravelerContactInputDto })
   contact?: TravelerContactInputDto;
 
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => TravelerDocumentInputDto)
-  // @ApiPropertyOptional({ type: [TravelerDocumentInputDto] })
+  @ApiPropertyOptional({ type: [TravelerDocumentInputDto] })
   documents?: TravelerDocumentInputDto[];
 }
 
@@ -125,12 +125,12 @@ export class SeatAssignmentInputDto {
   @IsString()
   @Length(1, 20)
   @ApiProperty({ example: 'trav_1' })
-  travelerId: string;
+  travelerId!: string;
 
   @IsString()
   @Length(1, 20)
   @ApiProperty({ example: 'seg_1' })
-  segmentId: string;
+  segmentId!: string;
 
   @IsString()
   @Length(1, 5)
@@ -138,28 +138,32 @@ export class SeatAssignmentInputDto {
     message: 'seatNumber must be like 12A, 3C, 20D',
   })
   @ApiProperty({ example: '12A' })
-  seatNumber: string;
+  seatNumber!: string;
 }
 
 export class CreateFlightOrderInputDto {
   @IsString()
   @ApiProperty({ example: 'search_abc123' })
-  searchId: string;
+  searchId!: string;
 
   @IsString()
   @ApiProperty({ example: 'offer_1' })
-  offerId: string;
+  offerId!: string;
 
   @IsOptional()
   @IsEnum(PaymentProvider)
-  @ApiPropertyOptional({ example: 'YOOKASSA' })
+  @ApiPropertyOptional({
+    example: 'YOOKASSA',
+    enum: PaymentProvider,
+    description: 'Способ оплаты (если не указан — используется по умолчанию)',
+  })
   paymentProvider?: PaymentProvider;
 
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => TravelerInputDto)
-  // @ApiPropertyOptional({ type: [TravelerInputDto] })
+  @ApiPropertyOptional({ type: [TravelerInputDto] })
   travelers?: TravelerInputDto[];
 
   @IsOptional()
@@ -167,6 +171,6 @@ export class CreateFlightOrderInputDto {
   @ArrayNotEmpty()
   @ValidateNested({ each: true })
   @Type(() => SeatAssignmentInputDto)
-  // @ApiPropertyOptional({ type: [SeatAssignmentInputDto] })
+  @ApiPropertyOptional({ type: [SeatAssignmentInputDto] })
   seats?: SeatAssignmentInputDto[];
 }
