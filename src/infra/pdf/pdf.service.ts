@@ -13,21 +13,24 @@ export class PdfService {
     date: string;
     departureTime: string;
   }): Promise<Buffer> {
-    const qrData = `PNR: ${data.pnr} | PAX: ${data.passengerName}`;
-    const qrCodeBase64 = await QRCode.toDataURL(qrData, {
-      margin: 1,
-      width: 200,
-      color: { dark: '#1a73e8', light: '#ffffff' },
-    });
+    try {
+      const qrData = `PNR: ${data.pnr} | PAX: ${data.passengerName}`;
+      const qrCodeBase64 = await QRCode.toDataURL(qrData, {
+        margin: 1,
+        width: 200,
+        color: { dark: '#1a73e8', light: '#ffffff' },
+      });
 
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
 
-    const page = await browser.newPage();
+      const browser = await puppeteer.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      });
 
-    const content = `
+
+      const page = await browser.newPage();
+
+      const content = `
       <!DOCTYPE html>
       <html>
       <head>
@@ -121,9 +124,14 @@ export class PdfService {
       </html>
     `;
 
-    await page.setContent(content);
-    const pdf = await page.pdf({ format: 'A4', printBackground: true });
-    await browser.close();
-    return Buffer.from(pdf);
+      await page.setContent(content);
+      const pdf = await page.pdf({ format: 'A4', printBackground: true });
+      await browser.close();
+      return Buffer.from(pdf);
+    } catch (e) {
+      console.error('PDF GENERATION ERROR');
+      console.error(e);
+      throw e;
+    }
   }
 }
