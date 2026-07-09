@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { AdminBookingsQueryDto } from './dto/admin-bookings-query.dto';
 import { BookingStatus, Prisma } from '@prisma/client';
+import { BookingWithRelations } from './types/booking-with-relations.prisma';
 
 @Injectable()
 export class AdminBookingsService {
@@ -12,7 +13,7 @@ export class AdminBookingsService {
 
     const where: Prisma.BookingWhereInput = {};
 
-    if (status) {
+    if (status && (status as string) !== 'all') {
       where.status = status;
     }
 
@@ -39,6 +40,22 @@ export class AdminBookingsService {
         include: {
           user: true,
           transaction: true,
+          travelers: true,
+          flightInstance: {
+            include: {
+              flight: {
+                include: {
+                  segments: {
+                    include: {
+                      departureAirport: true,
+                      arrivalAirport: true,
+                    },
+                  },
+                  airline: true,
+                },
+              },
+            },
+          },
         },
         orderBy: {
           createdAt: 'desc',
@@ -46,11 +63,12 @@ export class AdminBookingsService {
         skip: (page - 1) * limit,
         take: limit,
       }),
+
       this.prismaService.booking.count({ where }),
     ]);
 
     return {
-      data,
+      data: data.map((b) => this.mapBookingToAdminDto(b)),
       meta: {
         total,
         page,
@@ -73,5 +91,50 @@ export class AdminBookingsService {
       where: { id },
       data: { status },
     });
+  }
+
+  private mapBookingToAdminDto(b: BookingWithRelations) {
+    const segments = (b.flightInstance?.flight?.segments || []).sort(
+      (a, c) => a.segmentOrder - c.segmentOrder,
+    );
+
+    const firstSegment = segments[0];
+    const lastSegment = segments[segments.length - 1];
+
+    return {
+      id: b.id,
+
+      user: {
+        firstName: b.user?.firstName ?? '',
+        lastName: b.user?.lastName ?? '',
+      },
+
+      flight: {
+        number: firstSegment?.flightNumber ?? '—',
+
+        from: firstSegment?.departureAirport?.iataCode ?? '—',
+        to: lastSegment?.arrivalAirport?.iataCode ?? '—',
+
+        departureDate: firstSegment?.departureTime?.toISOString() ?? null,
+
+        durationMinutes: b.flightInstance?.flight?.durationMinutes ?? 0,
+
+        airline: b.flightInstance?.flight?.airline?.name ?? '—',
+      },
+
+      passengersCount: b.travelers?.length ?? 0,
+
+      totalPrice: Number(b.totalPrice),
+      currency: b.currency,
+
+      status: b.status,
+
+      transaction: b.transaction
+        ? {
+            id: b.transaction.id,
+            status: b.transaction.status,
+          }
+        : undefined,
+    };
   }
 }
