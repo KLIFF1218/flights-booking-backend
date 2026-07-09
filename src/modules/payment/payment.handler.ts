@@ -1,97 +1,194 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from 'src/infra/db/prisma/prisma.service';
+import { BookingStatus, TransactionStatus } from '@prisma/client';
 import { PaymentWebhookResult } from './interfaces/payment-webhook-result.dto';
-import { PrismaService } from 'src/infra/prisma/prisma.service';
-import {
-  Booking,
-  StatusBooking,
-  Transaction,
-  TransactionStatus,
-  User,
-} from '@prisma/client';
-import { MailService } from 'src/libs/mail/mail.service';
+import { Logger } from 'nestjs-pino';
+import { BookingEventsPublisher } from 'src/infra/rabbitmq/booking-events.publisher';
+import { KafkaPublisher } from 'src/infra/kafka/kafka.publisher';
+import { OutboxService } from 'src/infra/outbox/outbox.service';
+import { EnumTransport } from '@prisma/client';
 
 @Injectable()
 export class PaymentHandler {
-  private logger = new Logger(PaymentHandler.name);
   constructor(
-    private readonly prismaService: PrismaService,
-    private readonly mailService: MailService,
+    private readonly prisma: PrismaService,
+    private readonly logger: Logger,
+    private readonly bookingEventsPublisher: BookingEventsPublisher,
+    private readonly kafka: KafkaPublisher,
+    private readonly outbox: OutboxService,
   ) {}
-  async processResult(result: PaymentWebhookResult) {
-    const { bookingId, paymentId, status, transactionId } = result;
-    let updatedBooking: Booking | undefined;
-    let updatedTransaction: (Transaction & { user: User }) | undefined;
 
-    try {
-      await this.prismaService.$transaction(async (tx) => {
-        updatedTransaction = await tx.transaction.update({
+  async processResult(result: PaymentWebhookResult): Promise<void> {
+    const { transactionId, status, paymentId } = result;
+
+    let bookingIdToTicket: string | null = null;
+
+    await this.prisma.$transaction(async (tx) => {
+      const transaction = await tx.transaction.findUnique({
+        where: { id: transactionId },
+        include: { booking: true },
+      });
+
+      if (!transaction) {
+        throw new NotFoundException('Transaction not found');
+      }
+
+      if (
+        transaction.status === TransactionStatus.SUCCEED ||
+        transaction.status === TransactionStatus.CANCELED
+      ) {
+        this.logger.warn(
+          { transactionId, status: transaction.status },
+          'Transaction already finalized',
+        );
+        return;
+      }
+
+      await tx.transaction.update({
+        where: { id: transactionId },
+        data: {
+          status,
+          externalId: paymentId,
+        },
+      });
+
+      if (status === TransactionStatus.SUCCEED) {
+        await tx.booking.update({
+          where: { id: transaction.bookingId },
+          data: { status: BookingStatus.PAID },
+        });
+
+        const seats = await tx.seatAssignment.findMany({
+          where: { bookingId: transaction.bookingId },
+          select: { flightSeatId: true },
+        });
+
+        const seatIds = seats.map((s) => s.flightSeatId);
+
+        await tx.flightSeat.updateMany({
           where: {
-            id: transactionId,
+            id: { in: seatIds },
           },
           data: {
-            status,
-            externalId: paymentId,
-          },
-          include: {
-            user: true,
+            status: 'BOOKED',
           },
         });
 
-        if (!updatedTransaction)
-          throw new NotFoundException('Транзакция не найдена');
+        await tx.flightInstance.update({
+          where: {
+            id: transaction.booking.flightInstanceId!,
+          },
+          data: {
+            seatsAvailable: {
+              decrement: seatIds.length,
+            },
+          },
+        });
 
-        if (status === TransactionStatus.SUCCEED) {
-          updatedBooking = await tx.booking.update({
-            where: {
-              id: bookingId,
-            },
-            data: {
-              status: StatusBooking.CONFIRMED,
-            },
-          });
+        await tx.seatHold.deleteMany({
+          where: {
+            bookingId: transaction.bookingId,
+          },
+        });
 
-          this.logger.log('Оплата успешно обработана');
-        } else if (status === TransactionStatus.CANCELED) {
-          updatedBooking = await tx.booking.update({
-            where: {
-              id: bookingId,
-            },
-            data: {
-              status: StatusBooking.CANCELED,
-            },
-          });
+        bookingIdToTicket = transaction.bookingId;
 
-          await tx.flight.update({
-            where: {
-              id: updatedBooking.flightId,
-            },
-            data: {
-              availableSeats: { increment: updatedBooking.seats },
-            },
-          });
-
-          this.logger.log('Оплата отменена и бронирование отменено');
-        } else {
-          this.logger.error('Статус транзакции не изменен');
-        }
-      });
-    } catch (error) {
-      this.logger.error('Ошибка при обработке результата платежа: ', error);
-    }
-
-    try {
-      if (
-        status === TransactionStatus.SUCCEED &&
-        updatedBooking &&
-        updatedTransaction
-      ) {
-        await this.mailService.sendSuccessMail(
-          updatedTransaction.user,
-          updatedBooking,
-        );
+        this.logger.log({ bookingId: transaction.bookingId }, 'Booking marked as PAID');
       }
-    } catch (error) {
-      this.logger.error('Ошибка при отправке письма: ', error);
+
+      if (status === TransactionStatus.CANCELED) {
+        await tx.booking.update({
+          where: { id: transaction.bookingId },
+          data: { status: BookingStatus.CANCELED },
+        });
+
+        await tx.seatHold.deleteMany({
+          where: {
+            bookingId: transaction.bookingId,
+          },
+        });
+
+        const seats = await tx.seatAssignment.findMany({
+          where: {
+            bookingId: transaction.bookingId,
+          },
+          select: {
+            flightSeatId: true,
+          },
+        });
+
+        const seatIds = seats.map((s) => s.flightSeatId);
+
+        await tx.flightSeat.updateMany({
+          where: {
+            id: { in: seatIds },
+          },
+          data: {
+            status: 'AVAILABLE',
+          },
+        });
+
+        await tx.seatAssignment.deleteMany({
+          where: {
+            bookingId: transaction.bookingId,
+          },
+        });
+
+        this.logger.log(
+          { bookingId: transaction.bookingId },
+          'Booking canceled after payment failure',
+        );
+
+        await this.outbox.enqueue({
+          aggregateId: transaction.bookingId,
+          aggregateType: 'Booking',
+          topic: `${process.env.RABBITMQ_EXCHANGE || 'booking.events'}:payment.failed`,
+          payload: {
+            bookingId: transaction.bookingId,
+            transactionId: transaction.id,
+            reason: 'payment_canceled',
+            occurredAt: new Date().toISOString(),
+          },
+          transport: EnumTransport.RABBITMQ,
+        });
+
+        await this.outbox.enqueue({
+          aggregateId: transaction.bookingId,
+          aggregateType: 'Booking',
+          topic: 'payment.failed',
+          payload: {
+            bookingId: transaction.bookingId,
+            transactionId: transaction.id,
+            reason: 'payment_canceled',
+            occurredAt: new Date().toISOString(),
+          },
+          transport: EnumTransport.KAFKA,
+        });
+      }
+    });
+
+    if (bookingIdToTicket) {
+      await this.outbox.enqueue({
+        aggregateId: bookingIdToTicket,
+        aggregateType: 'Booking',
+        topic: `${process.env.RABBITMQ_EXCHANGE || 'booking.events'}:booking.paid`,
+        payload: {
+          bookingId: bookingIdToTicket,
+          occurredAt: new Date().toISOString(),
+        },
+        transport: EnumTransport.RABBITMQ,
+      });
+
+      await this.outbox.enqueue({
+        aggregateId: bookingIdToTicket,
+        aggregateType: 'Booking',
+        topic: 'booking.paid',
+        payload: {
+          bookingId: bookingIdToTicket,
+          occurredAt: new Date().toISOString(),
+        },
+        transport: EnumTransport.KAFKA,
+      });
     }
   }
 }
