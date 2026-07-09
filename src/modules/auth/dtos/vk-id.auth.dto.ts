@@ -2,14 +2,14 @@ import { IsString } from 'class-validator';
 
 export class VkIdAuthDto {
   @IsString()
-  code: string;
+  code!: string;
 
   @IsString()
-  state: string;
+  state!: string;
 
   @IsString()
-  code_verifier: string;
+  code_verifier!: string;
 
   @IsString()
-  device_id: string;
+  device_id!: string;
 }
