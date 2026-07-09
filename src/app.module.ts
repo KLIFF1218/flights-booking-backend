@@ -15,7 +15,7 @@ import { AuthModule } from './modules/auth/auth.module';
 
 import { InfraModule } from './infra/infra.module';
 import { MailModule } from './infra/mail/mail.module';
-import { RedisModule } from './redis/redis.module';
+import { RedisModule } from './infra/redis/redis.module';
 import { HealthModule } from './health/health.module';
 import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 
@@ -36,7 +36,7 @@ import { AdminFlightsModule } from './modules/admin/admin-flights/admin-flights.
 import { AdminAirportsModule } from './modules/admin/admin-airports/admin-airports.module';
 import { AircraftsModule } from './modules/aircrafts/aircrafts.module';
 import { AirlinesModule } from './modules/airlines/airlines.module';
-import { MetricsModule } from './metrics/metrics.module';
+import { MetricsModule } from './infra/metrics/metrics.module';
 import { RabbitmqModule } from './infra/rabbitmq/rabbitmq.module';
 import { KafkaModule } from './infra/kafka/kafka.module';
 import { OutboxModule } from './infra/outbox/outbox.module';
