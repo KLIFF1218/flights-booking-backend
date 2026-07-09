@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MailService } from './mail.service';
 import { MailerModule } from '@nestjs-modules/mailer';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConfigService } from '@nestjs/config';
 import { getMailerConfig } from 'src/config/mailer.config';
 import { BullModule } from '@nestjs/bullmq';
 import { MailProcessor } from './mail.processor';
@@ -10,7 +10,6 @@ import { MetricsModule } from 'src/infra/metrics/metrics.module';
 @Module({
   imports: [
     MailerModule.forRootAsync({
-      imports: [ConfigModule],
       useFactory: getMailerConfig,
       inject: [ConfigService],
     }),
@@ -23,7 +22,9 @@ import { MetricsModule } from 'src/infra/metrics/metrics.module';
           delay: 10_000,
         },
         removeOnComplete: true,
-        removeOnFail: false,
+        removeOnFail: {
+          age: 60 * 60 * 24 * 7,
+        },
       },
     }),
     MetricsModule,
