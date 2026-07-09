@@ -7,7 +7,11 @@ import { Logger } from 'nestjs-pino';
 type BookingMailJob = {
   email: string;
   bookingId: string;
-  pdfUrl?: string;
+  tickets?: {
+    travelerId: string;
+    ticketNumber: string;
+    downloadUrl: string;
+  }[];
 };
 
 @Processor('mail')
@@ -21,29 +25,42 @@ export class MailProcessor extends WorkerHost {
   }
 
   async process(job: Job<BookingMailJob>) {
-    const { email, bookingId, pdfUrl } = job.data;
+    this.logger.log(
+      {
+        createdAt: new Date(job.timestamp).toISOString(),
+        processedAt: new Date().toISOString(),
+        delayMs: Date.now() - job.timestamp,
+      },
+      'Processing mail job',
+    );
+
+    const { email, bookingId, tickets } = job.data;
 
     try {
       switch (job.name) {
-        case 'send-booking-success':
+        case 'send-booking-success': {
+          const attachments =
+            tickets?.map((ticket) => ({
+              filename: `Ticket-${ticket.ticketNumber}.pdf`,
+              href: ticket.downloadUrl,
+              contentType: 'application/pdf',
+            })) || [];
+
           await this.mailer.sendMail({
             to: email,
             subject: 'Ваш электронный билет готов ✈️',
             template: 'booking-success',
-            context: { bookingId },
-            attachments: pdfUrl
-              ? [
-                  {
-                    filename: `Ticket-${bookingId}.pdf`,
-                    path: pdfUrl,
-                    contentType: 'application/pdf',
-                  },
-                ]
-              : [],
+            context: {
+              bookingId,
+              tickets: job.data.tickets,
+            },
+            attachments,
           });
-          break;
 
-        case 'send-booking-failed':
+          break;
+        }
+
+        case 'send-booking-failed': {
           await this.mailer.sendMail({
             to: email,
             subject: 'Ошибка оформления бронирования',
@@ -51,16 +68,19 @@ export class MailProcessor extends WorkerHost {
             context: { bookingId },
           });
           break;
+        }
 
-        default:
+        default: {
           this.logger.warn({ jobName: job.name }, 'Unknown mail job');
+          break;
+        }
       }
 
       this.logger.log({ jobId: job.id, bookingId }, 'Mail sent successfully');
     } catch (error) {
       this.logger.error(
         {
-          error: error.message,
+          err: error,
           jobName: job.name,
           bookingId,
         },
