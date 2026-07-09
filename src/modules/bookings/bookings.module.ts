@@ -8,7 +8,7 @@ import { FlightsModule } from '../flights/flights.module';
 import { MockBookingService } from './services/mock-booking.service';
 import { S3Module } from 'src/infra/storage/s3.module';
 import { BookingsCacheService } from './services/bookings-cache.service';
-import { RedisModule } from 'src/redis/redis.module';
+import { RedisModule } from 'src/infra/redis/redis.module';
 import { OutboxModule } from 'src/infra/outbox/outbox.module';
 
 @Module({
