@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { FlightsService } from './services/flights.service';
 import { FlightsController } from './controllers/flights.controller';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
-import { RedisModule } from 'src/redis/redis.module';
+import { RedisModule } from 'src/infra/redis/redis.module';
 import { FlightsPricingService } from './services/flight-pricing.service';
 import { FlightPricingController } from './controllers/flight-pricing.controller';
 import { FlightsSearchStore } from './services/flights-cache.service';
