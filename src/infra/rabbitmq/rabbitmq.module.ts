@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { RabbitMQModule } from '@golevelup/nestjs-rabbitmq';
 
@@ -8,20 +8,25 @@ import { BookingEventsConsumer } from './booking-events.consumer';
 
 @Module({
   imports: [
-    TicketingModule,
+    forwardRef(() => TicketingModule),
     RabbitMQModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        uri: `amqp://${config.get('RABBITMQ_USER', 'guest')}:${config.get('RABBITMQ_PASSWORD', 'guest')}@${config.get('RABBITMQ_HOST', 'localhost')}:${config.get('RABBITMQ_PORT', 5672)}`,
+        uri: config.getOrThrow<string>('RABBITMQ_URI'),
+
         exchanges: [
           {
-            name: config.get('RABBITMQ_EXCHANGE', 'booking.events'),
+            name: config.getOrThrow<string>('RABBITMQ_EXCHANGE'),
             type: 'topic',
             durable: true,
           },
         ],
-        connectionInitOptions: { wait: false },
+
+        connectionInitOptions: {
+          wait: false,
+        },
+
         enableDirectReplyTo: false,
       }),
     }),
