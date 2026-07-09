@@ -2,12 +2,14 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Injectable } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import { Logger } from 'nestjs-pino';
+import { MetricsService } from '../metrics/metrics.service';
 
 @Injectable()
 export class MailService {
   constructor(
     @InjectQueue('mail') private readonly queue: Queue,
     private readonly logger: Logger,
+    private readonly metrics: MetricsService,
   ) {}
 
   async sendBookingSuccess(
@@ -36,6 +38,11 @@ export class MailService {
         },
       },
     );
+    try {
+      this.metrics.recordEmailSent('booking_success', 'queued');
+    } catch {
+      this.logger.warn(error, 'Failed to record metrics');
+    }
   }
 
   async sendBookingFailed(user: { email: string }, bookingId: string) {
@@ -57,5 +64,10 @@ export class MailService {
     );
 
     this.logger.log({ bookingId }, 'Booking failed email enqueued');
+    try {
+      this.metrics.recordEmailFailed('booking_failed', 'enqueued');
+    } catch {
+      this.logger.warn(error, 'Failed to record metrics');
+    }
   }
 }
