@@ -85,10 +85,15 @@ export interface Itinerary {
 }
 
 export interface Segment {
+  id: string;
   number: string;
   carrierCode: string;
   carrierName?: string;
   flightInstanceId?: string;
+
+  aircraft?: {
+    code: string | null;
+  };
 
   departure: {
     iataCode: string;
@@ -116,6 +121,14 @@ export interface TravelerPricing {
 }
 
 export interface FareDetailsBySegment {
+  segmentId?: string;
+
+  cabin?: TravelClass;
+
+  class?: string;
+
+  fareBasis?: string;
+
   includedCheckedBags?: {
     quantity?: number;
   };
