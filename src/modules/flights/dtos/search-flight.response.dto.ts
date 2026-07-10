@@ -6,11 +6,11 @@ export class SearchFlightsResponse {
     example: 'a611b114-d1ae-4975-beaa-65991690d8cd',
     description: 'Unique identifier of the flight search session',
   })
-  searchId: string;
+  searchId!: string;
 
   @ApiProperty({
     type: [FlightCardResponse],
     description: 'List of flight offers',
   })
-  flights: FlightCardResponse[];
+  flights!: FlightCardResponse[];
 }
