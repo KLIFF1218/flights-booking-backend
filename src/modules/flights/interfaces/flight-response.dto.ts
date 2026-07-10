@@ -1,47 +1,96 @@
-export interface FlightSegmentDto {
-  from: string;
-  to: string;
-  departureTime: string;
-  arrivalTime: string;
-  airline: string;
-  flightNumber: string;
-  cabin: 'ECONOMY' | 'PREMIUM_ECONOMY' | 'BUSINESS' | 'FIRST';
+import { ApiProperty } from '@nestjs/swagger';
+
+export class AirportTimeDto {
+  @ApiProperty({ example: 'SFO' })
+  airport!: string;
+
+  @ApiProperty({ example: '2026-03-08T07:55:00' })
+  time!: string;
+
+  @ApiProperty({ example: '2026-03-08T07:55:00' })
+  date!: string;
 }
 
-export interface FlightDirectionDto {
-  departure: {
-    airport: string;
-    time: string;
-  };
-  arrival: {
-    airport: string;
-    time: string;
-  };
-  durationMinutes: number;
-  stops: number;
-  segments: FlightSegmentDto[];
+export class PriceDto {
+  @ApiProperty({ example: 61878 })
+  total!: number;
+
+  @ApiProperty({ example: 'RUB' })
+  currency!: string;
 }
 
-export interface FlightCardResponse {
-  id: string;
+export class FlightSegmentDto {
+  @ApiProperty({ example: 'SFO' })
+  from!: string;
 
-  price: {
-    total: number;
-    currency: string;
-  };
+  @ApiProperty({ example: 'JFK' })
+  to!: string;
 
-  route: {
-    from: string;
-    to: string;
-    roundTrip: boolean;
-  };
+  @ApiProperty({ example: '2026-03-08T07:55:00' })
+  departureTime!: string;
 
-  outbound: FlightDirectionDto;
-  inbound?: FlightDirectionDto;
+  @ApiProperty({ example: '2026-03-08T16:29:00' })
+  arrivalTime!: string;
 
-  baggage: {
-    checked: number;
-  };
+  @ApiProperty({ example: 'AS' })
+  airline!: string;
 
-  airlines: string[];
+  @ApiProperty({ example: '211' })
+  flightNumber!: string;
+
+  @ApiProperty({ example: 334 })
+  durationMinutes!: number;
+}
+
+export class FlightRouteDto {
+  @ApiProperty({ example: 5 })
+  availableSeats!: number;
+
+  @ApiProperty({ example: 'SFO' })
+  from!: string;
+
+  @ApiProperty({ example: 'JFK' })
+  to!: string;
+
+  @ApiProperty({ type: AirportTimeDto })
+  departure!: AirportTimeDto;
+
+  @ApiProperty({ type: AirportTimeDto })
+  arrival!: AirportTimeDto;
+
+  @ApiProperty({ example: 334 })
+  durationMinutes!: number;
+
+  @ApiProperty({ example: 0 })
+  stops!: number;
+
+  @ApiProperty({
+    type: String,
+    isArray: true,
+    example: [],
+  })
+  stopCodes!: string[];
+
+  @ApiProperty({ example: 'AS' })
+  airline!: string;
+
+  @ApiProperty({ type: [FlightSegmentDto] })
+  segments!: FlightSegmentDto[];
+
+  @ApiProperty({ example: 'AS' })
+  airlineIata!: string;
+}
+
+export class FlightCardResponse {
+  @ApiProperty({ example: '1' })
+  offerId!: string;
+
+  @ApiProperty({ type: PriceDto })
+  price!: PriceDto;
+
+  @ApiProperty({ type: [FlightRouteDto] })
+  routes!: FlightRouteDto[];
+
+  @ApiProperty({ example: 334 })
+  totalDurationMinutes!: number;
 }
