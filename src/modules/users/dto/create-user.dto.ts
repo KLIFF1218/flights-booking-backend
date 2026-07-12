@@ -7,7 +7,7 @@ export class CreateUserDto {
     description: 'Email пользователя, используется для авторизации',
   })
   @IsEmail()
-  email: string;
+  email!: string;
 
   @ApiProperty({
     example: 'StrongPass123',
@@ -16,7 +16,7 @@ export class CreateUserDto {
   })
   @IsString()
   @MinLength(6)
-  password: string;
+  password!: string;
 
   @ApiProperty({
     example: 'John Doe',
@@ -24,5 +24,5 @@ export class CreateUserDto {
   })
   @IsString()
   @IsNotEmpty()
-  fullName: string;
+  fullName!: string;
 }
