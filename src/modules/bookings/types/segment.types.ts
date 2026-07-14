@@ -2,6 +2,9 @@ export interface BuiltSegment {
   id: string;
   flightInstanceId: string;
 
+  from: string;
+  to: string;
+
   departure: {
     iataCode: string;
     at: string;
@@ -15,9 +18,10 @@ export interface BuiltSegment {
   carrierCode: string;
   number: string;
 
-  aircraft: {
-    code: string | null;
-  };
+  airline: string;
+  airlineIata: string;
+
+  aircraft: string | null;
 
   operating: {
     carrierCode: string;
