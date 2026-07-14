@@ -10,13 +10,7 @@ import {
 import { Upload } from '@aws-sdk/lib-storage';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Logger } from 'nestjs-pino';
-
-export interface S3UploadOptions {
-  key: string;
-  body: Buffer | Uint8Array | ReadableStream | string;
-  contentType: string;
-  cacheControl?: string;
-}
+import { S3UploadOptions } from './interfaces/s3-upload-options';
 
 @Injectable()
 export class S3Service {
