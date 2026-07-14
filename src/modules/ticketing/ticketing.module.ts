@@ -6,6 +6,7 @@ import { PdfModule } from 'src/infra/pdf/pdf.module';
 import { S3Module } from 'src/infra/storage/s3.module';
 import { TicketingProcessor } from './ticketing.processor';
 import { MailModule } from 'src/infra/mail/mail.module';
+import { OutboxModule } from 'src/infra/outbox/outbox.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { MailModule } from 'src/infra/mail/mail.module';
     PdfModule,
     S3Module,
     MailModule,
+    OutboxModule,
   ],
   controllers: [TicketingController],
   providers: [TicketingService, TicketingProcessor],
