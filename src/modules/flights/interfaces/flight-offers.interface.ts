@@ -1,3 +1,6 @@
+import type { Currency, PassengerType } from '@prisma/client';
+import type { BuiltSegment } from 'src/modules/bookings/types/segment.types';
+
 export type TravelClass = 'ECONOMY' | 'PREMIUM_ECONOMY' | 'BUSINESS' | 'FIRST';
 
 export interface FlightDirection {
@@ -17,7 +20,7 @@ export interface FlightSearchParams {
   directions: FlightDirection[];
   passengers: PassengerCounts;
   travelClass: TravelClass;
-  currencyCode?: string;
+  currencyCode?: Currency;
   limit?: number;
 }
 
@@ -61,7 +64,7 @@ export interface FlightOffer {
   numberOfBookableSeats: number;
   price: {
     total: string;
-    currency: string;
+    currency: Currency;
     base?: string;
     grandTotal?: string;
     fees?: any[];
@@ -81,7 +84,7 @@ export interface FlightOffer {
 
 export interface Itinerary {
   duration: string;
-  segments: Segment[];
+  segments: BuiltSegment[];
 }
 
 export interface Segment {
@@ -109,27 +112,32 @@ export interface Segment {
 }
 
 export interface TravelerPricing {
-  travelerId?: string;
+  travelerId: string;
+  travelerType: PassengerType;
+
   fareOption?: string;
-  travelerType?: string;
-  price?: {
-    currency: string;
+
+  price: {
+    currency: Currency;
     total: string;
     base: string;
   };
-  fareDetailsBySegment?: FareDetailsBySegment[];
+
+  fareDetailsBySegment: FareDetailsBySegment[];
 }
 
 export interface FareDetailsBySegment {
-  segmentId?: string;
+  segmentId: string;
 
-  cabin?: TravelClass;
+  cabin: TravelClass;
 
   class?: string;
 
-  fareBasis?: string;
+  fareBasis: string | null;
 
-  includedCheckedBags?: {
-    quantity?: number;
+  includedCheckedBags: {
+    quantity: number;
   };
+
+  brandName: string | null;
 }
