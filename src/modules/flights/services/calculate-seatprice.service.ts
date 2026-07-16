@@ -1,11 +1,12 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { SeatOption } from '../interfaces/seat-options';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
+import { FlightOffer } from '../interfaces/flight-offers.interface';
 
 @Injectable()
 export class CalculateSeatPrice {
   constructor(private readonly prisma: PrismaService) {}
-  async calculateSeatPrice(offer: any, seats: SeatOption[]) {
+  async calculateSeatPrice(offer: FlightOffer, seats: SeatOption[]) {
     if (!seats.length) {
       return 0;
     }
@@ -14,8 +15,8 @@ export class CalculateSeatPrice {
 
     for (const selectedSeat of seats) {
       const segment = offer.itineraries
-        .flatMap((i: any) => i.segments)
-        .find((s: any) => s.id === selectedSeat.segmentId);
+        .flatMap((i) => i.segments)
+        .find((s) => s.id === selectedSeat.segmentId);
 
       if (!segment) {
         throw new BadRequestException(`Segment ${selectedSeat.segmentId} not found`);
