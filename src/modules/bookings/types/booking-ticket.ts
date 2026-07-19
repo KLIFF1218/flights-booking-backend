@@ -3,6 +3,6 @@ export type BookingTicketDto = {
   travelerId: string;
   ticketNumber: string;
   status: string;
-  previewUrl: string;
-  downloadUrl: string;
+  previewUrl?: string;
+  downloadUrl?: string;
 };
