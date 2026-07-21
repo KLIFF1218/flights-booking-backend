@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import 'dotenv/config';
 
 import { PrismaPg } from '@prisma/adapter-pg';
+import { runSeedMain } from './lib/run-if-main';
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({
@@ -253,11 +254,4 @@ async function main() {
   await seedAirports();
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+runSeedMain(main, () => prisma.$disconnect());
