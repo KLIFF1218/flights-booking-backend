@@ -1,14 +1,15 @@
-import { forwardRef, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { RabbitMQModule } from '@golevelup/nestjs-rabbitmq';
 
-import { TicketingModule } from 'src/modules/ticketing/ticketing.module';
+import { TicketingQueueModule } from 'src/modules/ticketing/ticketing-queue.module';
 import { BookingEventsPublisher } from './booking-events.publisher';
 import { BookingEventsConsumer } from './booking-events.consumer';
+import { RabbitmqShutdownService } from './rabbitmq-shutdown.service';
 
 @Module({
   imports: [
-    forwardRef(() => TicketingModule),
+    TicketingQueueModule,
     RabbitMQModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -31,7 +32,7 @@ import { BookingEventsConsumer } from './booking-events.consumer';
       }),
     }),
   ],
-  providers: [BookingEventsPublisher, BookingEventsConsumer],
-  exports: [BookingEventsPublisher],
+  providers: [BookingEventsPublisher, BookingEventsConsumer, RabbitmqShutdownService],
+  exports: [BookingEventsPublisher, RabbitMQModule],
 })
 export class RabbitmqModule {}
