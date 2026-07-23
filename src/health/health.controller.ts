@@ -5,12 +5,15 @@ import {
   HealthIndicatorService,
   PrismaHealthIndicator,
 } from '@nestjs/terminus';
-import { ApiTags, ApiOperation, ApiOkResponse } from '@nestjs/swagger';
+import { ApiExcludeController } from '@nestjs/swagger';
 
 import { PrismaService } from '../infra/db/prisma/prisma.service';
 import { RedisHealthIndicator } from './redis.health-indicator';
+import { RabbitmqHealthIndicator } from './rabbitmq.health-indicator';
+import { SkipRateLimit } from '../common/decorators';
 
-@ApiTags('Health')
+@ApiExcludeController()
+@SkipRateLimit()
 @Controller({
   path: 'health',
   version: VERSION_NEUTRAL,
@@ -22,6 +25,7 @@ export class HealthController {
     private readonly prismaHealth: PrismaHealthIndicator,
     private readonly prisma: PrismaService,
     private readonly redisHealth: RedisHealthIndicator,
+    private readonly rabbitmqHealth: RabbitmqHealthIndicator,
   ) {}
 
   @Get()
@@ -36,6 +40,7 @@ export class HealthController {
     return this.health.check([
       () => this.prismaHealth.pingCheck('database', this.prisma),
       () => this.redisHealth.pingCheck('redis'),
+      () => this.rabbitmqHealth.pingCheck('rabbitmq'),
     ]);
   }
 }
