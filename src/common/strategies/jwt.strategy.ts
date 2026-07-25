@@ -5,21 +5,27 @@ import { Strategy, ExtractJwt } from 'passport-jwt';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { JwtPayload } from 'src/modules/auth/interfaces';
 import { assertUserNotBlocked } from 'src/common/utils/assert-user-active';
+import { getJwtAccessSecret } from 'src/config/jwt-secrets';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   constructor(
     private readonly prismaService: PrismaService,
-    private readonly configService: ConfigService,
+    configService: ConfigService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-      secretOrKey: configService.getOrThrow<string>('JWT_SECRET'),
+      secretOrKey: getJwtAccessSecret(configService),
       ignoreExpiration: false,
+      algorithms: ['HS256'],
     });
   }
 
   async validate(payload: JwtPayload) {
+    if (payload.typ !== 'access') {
+      throw new UnauthorizedException('Invalid access token');
+    }
+
     const user = await this.prismaService.user.findUnique({
       where: {
         id: payload.id,
