@@ -4,6 +4,7 @@ import type { PaymentWebhookResult } from './payment-webhook-result.dto';
 export interface PaymentProviderAdapter {
   createPayment(params: {
     transactionId: string;
+    bookingId: string;
     amount: number;
     currency: Currency;
     idempotencyKey: string;
