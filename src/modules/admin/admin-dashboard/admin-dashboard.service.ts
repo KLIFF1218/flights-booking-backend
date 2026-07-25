@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
-import { DashboardStatsDto } from './dto/admin-dashboard-stats.dto';
+import { DashboardStatsDto } from './dtos/admin-dashboard-stats.dto';
 import { BookingStatus, TransactionStatus } from '@prisma/client';
+import type { BookingSnapshot } from 'src/modules/bookings/interfaces/booking-snapshot.interface';
+import { extractRouteFromSnapshot } from 'src/modules/bookings/utils/booking-snapshot.util';
 
 @Injectable()
 export class AdminDashboardService {
@@ -101,7 +103,7 @@ export class AdminDashboardService {
 
     const activeFlightsDelta = activeFlights - activeFlightsWeekAgo;
 
-    const rawMonthlyRevenue = await this.prisma.$queryRaw<{ month: Date; revenue: any }[]>`
+    const rawMonthlyRevenue = await this.prisma.$queryRaw<{ month: Date; revenue: unknown }[]>`
       SELECT 
         DATE_TRUNC('month', "createdAt") as month,
         SUM("amount") as revenue
@@ -133,22 +135,13 @@ export class AdminDashboardService {
 
     const routeMap = new Map<string, number>();
     for (const booking of bookingsWithSnapshots) {
-      const snapshot = booking.snapshot as any;
-      const flightOffers = Array.isArray(snapshot?.flightOffers)
-        ? snapshot.flightOffers
-        : snapshot?.flightOffer
-        ? [snapshot.flightOffer]
-        : [];
-
-      const offer = flightOffers[0];
-      const itinerary = offer?.itineraries?.[0];
-      const segment = itinerary?.segments?.[0];
-      const origin = segment?.departure?.iataCode;
-      const destination = segment?.arrival?.iataCode;
-
-      if (origin && destination) {
+      try {
+        const snapshot = booking.snapshot as unknown as BookingSnapshot;
+        const { origin, destination } = extractRouteFromSnapshot(snapshot);
         const route = `${origin}-${destination}`;
         routeMap.set(route, (routeMap.get(route) ?? 0) + 1);
+      } catch {
+        // skip bookings with invalid or legacy snapshots
       }
     }
 
@@ -182,18 +175,18 @@ export class AdminDashboardService {
 
   private formatMonth(date: Date): string {
     const months = [
-      'Янв',
-      'Фев',
-      'Мар',
-      'Апр',
-      'Май',
-      'Июн',
-      'Июл',
-      'Авг',
-      'Сен',
-      'Окт',
-      'Ноя',
-      'Дек',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return months[date.getMonth()];
   }
