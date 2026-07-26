@@ -8,11 +8,17 @@ export interface BuiltSegment {
   departure: {
     iataCode: string;
     at: string;
+    localDate?: string;
+    localTime?: string;
+    timezone?: string;
   };
 
   arrival: {
     iataCode: string;
     at: string;
+    localDate?: string;
+    localTime?: string;
+    timezone?: string;
   };
 
   carrierCode: string;
