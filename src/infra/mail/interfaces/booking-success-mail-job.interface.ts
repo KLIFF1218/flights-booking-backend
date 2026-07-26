@@ -4,6 +4,6 @@ export interface BookingSuccessMailJob {
   tickets: {
     travelerId: string;
     ticketNumber: string;
-    downloadUrl: string;
+    pdfKey: string;
   }[];
 }
