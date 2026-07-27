@@ -1,22 +1,18 @@
-import { Injectable } from '@nestjs/common';
-import { AmadeusPricingProvider } from './AmadeusPricingProvider.service';
-import { DbPricingProvider } from './DbPricingProvider.service';
-import { FlightPricingResponse } from '../dtos/flight-pricing.response.dto';
+import { Inject, Injectable } from '@nestjs/common';
+import {
+  FLIGHT_PRICING_PROVIDER,
+  type FlightPricingOptions,
+  type FlightPricingProvider,
+} from '../providers/flight-pricing.provider';
 
 @Injectable()
 export class FlightsPricingService {
-  private readonly mode = process.env.BOOKING_MODE === 'REAL' ? 'REAL' : 'MOCK';
-
   constructor(
-    private readonly amadeusProvider: AmadeusPricingProvider,
-    private readonly dbProvider: DbPricingProvider,
+    @Inject(FLIGHT_PRICING_PROVIDER)
+    private readonly pricingProvider: FlightPricingProvider,
   ) {}
 
-  async price(searchId: string, offerId: string, options?: any): Promise<FlightPricingResponse> {
-    if (this.mode === 'REAL') {
-      return this.amadeusProvider.price(searchId, offerId, options);
-    }
-
-    return this.dbProvider.price(searchId, offerId, options);
+  async price(searchId: string, offerId: string, options?: FlightPricingOptions) {
+    return this.pricingProvider.price(searchId, offerId, options);
   }
 }

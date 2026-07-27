@@ -1,12 +1,11 @@
 apiVersion: 1
 
 providers:
-  - name: 'flight-booking-dashboards'
+  - name: 'max-airline-dashboards'
     orgId: 1
-    folder: 'Flight Booking'
+    folder: 'MaxAirline'
     type: file
     disableDeletion: false
     editable: true
     options:
-      path: /var/lib/grafana/dashboards
-
+      path: /etc/grafana/provisioning/dashboards/max-airline

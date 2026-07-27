@@ -1,11 +1,11 @@
-import { Module } from '@nestjs/common';
+import { Module, Scope } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { APP_GUARD, APP_FILTER } from '@nestjs/core';
+import currencyConfig from './config/currency.config';
+import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 
 import { LoggerModule } from 'nestjs-pino';
 import { SentryModule, SentryGlobalFilter } from '@sentry/nestjs/setup';
 import { BullModule } from '@nestjs/bullmq';
-
 
 import { FlightsModule } from './modules/flights/flights.module';
 import { BookingsModule } from './modules/bookings/bookings.module';
@@ -16,20 +16,32 @@ import { AuthModule } from './modules/auth/auth.module';
 
 import { InfraModule } from './infra/infra.module';
 import { MailModule } from './infra/mail/mail.module';
-import { RedisModule } from './redis/redis.module';
-import { PrometheusModule } from '@willsoto/nestjs-prometheus';
+import { RedisModule } from './infra/redis/redis.module';
+import { HealthModule } from './health/health.module';
 
 import { RateLimitGuard } from './common/guards/rate-limit.guard';
 import { RateLimiterService } from './infra/rate-limiter/rate-limiter-redis.service';
+import { MetricsInterceptor } from './common/interceptors/metrics.interceptor';
 
 import { isDev } from './common/utils';
 import { TicketingModule } from './modules/ticketing/ticketing.module';
-import { DebugModule } from './debug/debug.module';
 import { AdminUsersModule } from './modules/admin/admin-users/admin-users.module';
 import { UsersModule } from './modules/users/users.module';
 import { AdminBookingsModule } from './modules/admin/admin-bookings/admin-bookings.module';
 import { AdminPaymentsModule } from './modules/admin/admin-payments/admin-payments.module';
 import { AdminDashboardModule } from './modules/admin/admin-dashboard/admin-dashboard.module';
+import { SchedulerModule } from './modules/scheduler/scheduler.module';
+import { AdminFlightsModule } from './modules/admin/admin-flights/admin-flights.module';
+import { AdminAirportsModule } from './modules/admin/admin-airports/admin-airports.module';
+import { AircraftsModule } from './modules/aircrafts/aircrafts.module';
+import { AirlinesModule } from './modules/airlines/airlines.module';
+import { MetricsModule } from './infra/metrics/metrics.module';
+import { RabbitmqModule } from './infra/rabbitmq/rabbitmq.module';
+import { KafkaModule } from './infra/kafka/kafka.module';
+import { OutboxModule } from './infra/outbox/outbox.module';
+import { LifecycleModule } from './infra/lifecycle/lifecycle.module';
+import { validateEnv } from './config/env.validation';
+import { AppValidationPipe } from './common/pipes/app-validation.pipe';
 
 @Module({
   imports: [
@@ -37,6 +49,8 @@ import { AdminDashboardModule } from './modules/admin/admin-dashboard/admin-dash
       isGlobal: true,
       cache: true,
       expandVariables: true,
+      load: [currencyConfig],
+      validate: validateEnv,
     }),
 
     LoggerModule.forRootAsync({
@@ -47,6 +61,21 @@ import { AdminDashboardModule } from './modules/admin/admin-dashboard/admin-dash
         return {
           pinoHttp: {
             level: config.get('LOG_LEVEL', 'info'),
+            redact: {
+              paths: [
+                'req.headers.authorization',
+                'req.headers.cookie',
+                'body.password',
+                'body.token',
+                'body.refreshToken',
+                'body.accessToken',
+                '*.password',
+                '*.token',
+                '*.refreshToken',
+                '*.accessToken',
+              ],
+              censor: '[REDACTED]',
+            },
 
             transport: dev
               ? {
@@ -59,7 +88,26 @@ import { AdminDashboardModule } from './modules/admin/admin-dashboard/admin-dash
                 }
               : undefined,
 
-            genReqId: (req) => req.headers['x-request-id'] ?? crypto.randomUUID(),
+            genReqId: (req) => {
+              const request = req as {
+                requestId?: string;
+                headers: Record<string, string | string[] | undefined>;
+              };
+              if (request.requestId) {
+                return request.requestId;
+              }
+
+              const header = request.headers['x-request-id'] ?? request.headers['x-correlation-id'];
+              if (typeof header === 'string' && header.length > 0) {
+                return header;
+              }
+
+              return crypto.randomUUID();
+            },
+
+            customProps: (req) => ({
+              requestId: (req as { requestId?: string }).requestId ?? req.headers['x-request-id'],
+            }),
 
             autoLogging: false,
           },
@@ -71,14 +119,22 @@ import { AdminDashboardModule } from './modules/admin/admin-dashboard/admin-dash
 
     InfraModule,
     RedisModule,
+    RabbitmqModule,
     MailModule,
+    KafkaModule,
+    SchedulerModule,
+    HealthModule,
 
-    PrometheusModule.register({
-      path: '/metrics',
-      defaultMetrics: {
-        enabled: true,
-      },
-    }),
+    OutboxModule,
+    LifecycleModule,
+
+    // PrometheusModule.register({
+    //   path: '/metrics',
+    //   defaultMetrics: {
+    //     enabled: true,
+    //   },
+    // }),
+    MetricsModule,
 
     BullModule.forRootAsync({
       inject: [ConfigService],
@@ -86,7 +142,9 @@ import { AdminDashboardModule } from './modules/admin/admin-dashboard/admin-dash
         connection: {
           host: config.getOrThrow('REDIS_HOST'),
           port: config.getOrThrow('REDIS_PORT'),
-          password: config.get('REDIS_PASSWORD'),
+          ...(config.get<string>('REDIS_PASSWORD')
+            ? { password: config.get<string>('REDIS_PASSWORD') }
+            : {}),
           tls: config.get('REDIS_TLS') === 'true' ? {} : undefined,
         },
       }),
@@ -99,12 +157,15 @@ import { AdminDashboardModule } from './modules/admin/admin-dashboard/admin-dash
     AirportsModule,
     SeatMapModule,
     TicketingModule,
-    DebugModule,
     AdminUsersModule,
     UsersModule,
     AdminBookingsModule,
     AdminPaymentsModule,
     AdminDashboardModule,
+    AdminFlightsModule,
+    AdminAirportsModule,
+    AircraftsModule,
+    AirlinesModule,
   ],
 
   providers: [
@@ -112,10 +173,19 @@ import { AdminDashboardModule } from './modules/admin/admin-dashboard/admin-dash
       provide: APP_FILTER,
       useClass: SentryGlobalFilter,
     },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: MetricsInterceptor,
+    },
     RateLimiterService,
     {
       provide: APP_GUARD,
       useClass: RateLimitGuard,
+    },
+    {
+      provide: APP_PIPE,
+      scope: Scope.REQUEST,
+      useClass: AppValidationPipe,
     },
   ],
 })

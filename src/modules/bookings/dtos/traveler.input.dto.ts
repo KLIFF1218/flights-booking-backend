@@ -1,45 +1,99 @@
-
-import { IsDateString, IsEnum, IsString } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsDateString, IsEnum, IsOptional, IsString } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export enum Gender {
   MALE = 'MALE',
   FEMALE = 'FEMALE',
 }
 
+function emptyStringToUndefined({ value }: { value: unknown }) {
+  if (typeof value === 'string' && value.trim() === '') {
+    return undefined;
+  }
+
+  return value;
+}
+
 export class TravelerInputDto {
+  @IsOptional()
   @IsString()
-  firstName: string;
+  @ApiPropertyOptional({
+    description: 'Client-generated traveler id; preserved when saving to booking',
+    example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+  })
+  id?: string;
 
   @IsString()
-  lastName: string;
+  @ApiProperty({ example: 'Ivan' })
+  firstName!: string;
+
+  @IsString()
+  @ApiProperty({ example: 'Ivanov' })
+  lastName!: string;
 
   @IsEnum(Gender)
-  gender: Gender;
+  @ApiProperty({ example: Gender.MALE, enum: Gender })
+  gender!: Gender;
 
   @IsDateString()
-  dateOfBirth: string;
+  @ApiProperty({ example: '1990-01-01' })
+  dateOfBirth!: string;
 
+  @IsOptional()
+  @Transform(emptyStringToUndefined)
   @IsString()
-  email: string;
+  @ApiPropertyOptional({ example: 'ivan@example.com' })
+  email?: string;
 
+  @IsOptional()
+  @Transform(emptyStringToUndefined)
   @IsString()
-  phoneCountryCode: string;
+  @ApiPropertyOptional({ example: '7' })
+  phoneCountryCode?: string;
 
+  @IsOptional()
+  @Transform(emptyStringToUndefined)
   @IsString()
-  phoneNumber: string;
+  @ApiPropertyOptional({ example: '9261234567' })
+  phoneNumber?: string;
 
+  @IsOptional()
+  @Transform(emptyStringToUndefined)
   @IsString()
-  passportNumber: string;
+  @ApiPropertyOptional({ example: '1234567890' })
+  passportNumber?: string;
 
+  @IsOptional()
+  @Transform(emptyStringToUndefined)
   @IsDateString()
-  passportIssuanceDate: string;
+  @ApiPropertyOptional({ example: '2015-01-01' })
+  passportIssuanceDate?: string;
 
+  @IsOptional()
+  @Transform(emptyStringToUndefined)
   @IsDateString()
-  passportExpiry: string;
+  @ApiPropertyOptional({ example: '2025-01-01' })
+  passportExpiry?: string;
 
+  @IsOptional()
+  @Transform(emptyStringToUndefined)
   @IsString()
-  birthPlace: string;
+  @ApiPropertyOptional({ example: 'Moscow' })
+  birthPlace?: string;
 
+  @IsOptional()
+  @Transform(emptyStringToUndefined)
   @IsString()
-  nationality: string;
+  @ApiPropertyOptional({ example: 'RU' })
+  nationality?: string;
+
+  @IsOptional()
+  @Transform(emptyStringToUndefined)
+  @IsString()
+  @ApiPropertyOptional({
+    description: 'Client id of the accompanying adult traveler (required for infants)',
+    example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+  })
+  accompanyingTravelerId?: string;
 }

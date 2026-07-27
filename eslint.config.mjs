@@ -53,7 +53,38 @@ export default tseslint.config(
           endOfLine: 'lf',
         },
       ],
+    },
+  },
+
+  {
+    files: ['src/**/*.ts'],
+    rules: {
+      'no-console': 'error',
+    },
+  },
+
+  {
+    files: ['scripts/**/*.ts'],
+    rules: {
       'no-console': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/consistent-type-imports': 'off',
+    },
+  },
+
+  {
+    files: ['**/*.{spec,e2e-spec}.ts', 'test/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+      '@typescript-eslint/unbound-method': 'off',
     },
   },
 );

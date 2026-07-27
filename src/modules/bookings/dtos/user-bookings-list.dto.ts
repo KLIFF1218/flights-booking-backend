@@ -1,133 +1,134 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { BookingStatus, Currency } from '@prisma/client';
+import { BookingListItemDto } from './booking-list-item.dto';
 
 export class BookingDetailDto {
   @ApiProperty({
     example: 'clu3y9ab0002qz0q2yex8w9s0',
-    description: 'ID бронирования',
+    description: 'Booking ID',
   })
-  id: string;
+  id!: string;
 
   @ApiProperty({
     example: 'cmlkwumde0000rou70qi84z9d',
-    description: 'ID пользователя',
+    description: 'User ID',
   })
-  userId: string;
+  userId!: string;
 
   @ApiProperty({
     example: 'ABC123',
-    description: 'PNR локатор (подтверждение от авиакомпании)',
+    description: 'PNR locator (airline confirmation)',
   })
-  pnrLocator: string;
+  pnrLocator!: string;
 
   @ApiProperty({
     example: '2025-01-20',
-    description: 'ID рейса',
+    description: 'Flight order ID',
   })
-  flightOrderId: string;
+  flightOrderId!: string;
 
   @ApiProperty({
     enum: BookingStatus,
     example: BookingStatus.PNR_CREATED,
-    description: 'Статус бронирования',
+    description: 'Booking status',
   })
-  status: BookingStatus;
+  status!: BookingStatus;
 
   @ApiProperty({
     example: 350.5,
-    description: 'Общая стоимость',
+    description: 'Total price',
   })
-  totalPrice: number;
+  totalPrice!: number;
 
   @ApiProperty({
     enum: Currency,
     example: Currency.USD,
-    description: 'Валюта',
+    description: 'Currency',
   })
-  currency: Currency;
+  currency!: Currency;
 
   @ApiProperty({
-    example: 'AMADEUS',
-    description: 'Провайдер (откуда забронировано)',
+    example: 'INTERNAL',
+    description: 'Booking provider (INTERNAL = local inventory; no external GDS)',
   })
-  provider: string;
-
-  @ApiProperty({
-    example: '2025-12-25T23:59:59.000Z',
-    description: 'Последний день выписки билета',
-  })
-  lastTicketingDate: Date;
+  provider!: string;
 
   @ApiProperty({
     example: '2025-12-25T23:59:59.000Z',
-    description: 'Дата истечения бронирования',
+    description: 'Last ticketing date',
   })
-  expiresAt: Date;
+  lastTicketingDate!: Date;
+
+  @ApiProperty({
+    example: '2025-12-25T23:59:59.000Z',
+    description: 'Booking expiration date',
+  })
+  expiresAt!: Date;
 
   @ApiProperty({
     example: '2025-02-23T10:30:00.000Z',
-    description: 'Дата создания',
+    description: 'Creation date',
   })
-  createdAt: Date;
+  createdAt!: Date;
 
   @ApiProperty({
     example: '2025-02-23T10:30:00.000Z',
-    description: 'Дата последнего обновления',
+    description: 'Last update date',
   })
-  updatedAt: Date;
+  updatedAt!: Date;
 
   @ApiProperty({
     example: 'John Doe',
-    description: 'ФИ пассажира',
+    description: 'Passenger full name',
   })
-  passengerName: string;
+  passengerName!: string;
 
   @ApiProperty({
     example: 'SVO',
-    description: 'IATA код аэропорта отправления',
+    description: 'Departure airport IATA code',
   })
-  departureAirport: string;
+  departureAirport!: string;
 
   @ApiProperty({
     example: '2025-03-15T14:30:00Z',
-    description: 'Время отправления',
+    description: 'Departure time',
   })
-  departureTime: string;
+  departureTime!: string;
 
   @ApiProperty({
     example: 'JFK',
-    description: 'IATA код аэропорта прибытия',
+    description: 'Arrival airport IATA code',
   })
-  arrivalAirport: string;
+  arrivalAirport!: string;
 
   @ApiProperty({
     example: '2025-03-15T20:30:00Z',
-    description: 'Время прибытия',
+    description: 'Arrival time',
   })
-  arrivalTime: string;
+  arrivalTime!: string;
 
   @ApiProperty({
     example: 'ECONOMY',
-    description: 'Класс кабины',
+    description: 'Cabin class',
   })
-  cabin: string;
+  cabin!: string;
 
   @ApiProperty({
     example: '12A',
-    description: 'Номер места (может быть null если не назначено)',
+    description: 'Seat number (may be null if not assigned)',
     required: false,
   })
   seatNumber?: string | null;
 
   @ApiProperty({
     example: 'SU',
-    description: 'Код авиакомпании',
+    description: 'Airline code',
     required: false,
   })
   airlineCode?: string;
 
   @ApiProperty({
-    description: 'Полные данные рейса',
+    description: 'Full flight data',
     additionalProperties: true,
     required: false,
   })
@@ -136,14 +137,32 @@ export class BookingDetailDto {
 
 export class UserBookingsListDto {
   @ApiProperty({
-    type: [BookingDetailDto],
-    description: 'Список бронирований пользователя',
+    type: [BookingListItemDto],
+    description: 'List of user bookings',
   })
-  bookings: BookingDetailDto[];
+  bookings!: BookingListItemDto[];
 
   @ApiProperty({
     example: 5,
-    description: 'Количество бронирований',
+    description: 'Total number of user bookings',
   })
-  total: number;
+  total!: number;
+
+  @ApiProperty({
+    example: 1,
+    description: 'Current page',
+  })
+  page!: number;
+
+  @ApiProperty({
+    example: 20,
+    description: 'Page size',
+  })
+  limit!: number;
+
+  @ApiProperty({
+    example: 1,
+    description: 'Total pages',
+  })
+  totalPages!: number;
 }

@@ -1,48 +1,66 @@
-import { ISendMailOptions, MailerService } from '@nestjs-modules/mailer';
 import { InjectQueue } from '@nestjs/bullmq';
-import { Injectable, Logger } from '@nestjs/common';
-import { Booking, User } from '@prisma/client';
+import { Injectable } from '@nestjs/common';
 import { Queue } from 'bullmq';
+import { Logger } from 'nestjs-pino';
+import { MetricsService } from '../metrics/metrics.service';
+import { runSafely } from 'src/common/utils/safe-metrics.util';
 
 @Injectable()
 export class MailService {
-  private logger = new Logger(MailService.name);
   constructor(
-    @InjectQueue('mail') private queue: Queue,
-    private readonly mailerService: MailerService,
+    @InjectQueue('mail') private readonly queue: Queue,
+    private readonly logger: Logger,
+    private readonly metrics: MetricsService,
   ) {}
 
-  async sendSuccessMail(user: User, booking: Booking) {
+  async sendBookingSuccess(
+    user: { email: string },
+    bookingId: string,
+    tickets: {
+      travelerId: string;
+      ticketNumber: string;
+      pdfKey: string;
+    }[],
+  ) {
     await this.queue.add(
-      'send-email',
+      'send-booking-success',
       {
         email: user.email,
-        subject: `Бронирование №${booking.bookingNumber} прошло успешно`,
+        bookingId,
+        tickets,
       },
       {
+        jobId: `mail:booking-success:${bookingId}`,
         removeOnComplete: true,
+        attempts: 5,
+        backoff: {
+          type: 'exponential',
+          delay: 10_000,
+        },
       },
     );
+    runSafely(() => this.metrics.recordEmailEnqueued('booking_success'));
   }
 
-  async sendFailedMail(user: User) {
+  async sendBookingFailed(user: { email: string }, bookingId: string) {
     await this.queue.add(
-      'send-email',
+      'send-booking-failed',
       {
         email: user.email,
-        subject: 'Не удалось забронировать авибилеты',
+        bookingId,
       },
       {
+        jobId: `mail:booking-failed:${bookingId}`,
         removeOnComplete: true,
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 10_000,
+        },
       },
     );
-  }
 
-  async sendMail(options: ISendMailOptions) {
-    try {
-      await this.mailerService.sendMail(options);
-    } catch (error) {
-      this.logger.error('Ошибка при оправке письма: ', error);
-    }
+    this.logger.log({ bookingId }, 'Booking failed email enqueued');
+    runSafely(() => this.metrics.recordEmailEnqueued('booking_failed'));
   }
 }

@@ -1,7 +1,16 @@
-import { Module } from '@nestjs/common';
-import { AuthService } from './auth.service';
-import { AuthController } from './auth.controller';
-import { PrismaService } from 'src/infra/db/prisma/prisma.service';
+import { Module, forwardRef } from '@nestjs/common';
+import { AuthService } from './services/auth.service';
+import { TokenService } from './services/token.service';
+import { RefreshService } from './services/refresh.service';
+import { SocialService } from './services/social.service';
+import { CsrfService } from './services/csrf.service';
+import { PasswordService } from './services/password.service';
+import { EmailTokenService } from './services/email-token.service';
+import { AuthEmailService } from './services/auth-email.service';
+import { EmailVerificationService } from './services/email-verification.service';
+import { PasswordLifecycleService } from './services/password-lifecycle.service';
+import { SessionsService } from './services/sessions.service';
+import { AuthController } from './controllers/auth.controller';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { getJwtConfig } from 'src/config';
@@ -17,9 +26,23 @@ import { UsersModule } from '../users/users.module';
       useFactory: getJwtConfig,
       inject: [ConfigService],
     }),
-    UsersModule,
+    forwardRef(() => UsersModule),
   ],
   controllers: [AuthController],
-  providers: [AuthService, PrismaService, JwtStrategy],
+  providers: [
+    AuthService,
+    TokenService,
+    RefreshService,
+    SocialService,
+    CsrfService,
+    PasswordService,
+    EmailTokenService,
+    AuthEmailService,
+    EmailVerificationService,
+    PasswordLifecycleService,
+    SessionsService,
+    JwtStrategy,
+  ],
+  exports: [EmailVerificationService, PasswordService, AuthService, SessionsService],
 })
 export class AuthModule {}

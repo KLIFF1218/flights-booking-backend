@@ -1,79 +1,79 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
-import { Logger } from 'nestjs-pino';
+import { SearchLocationsDto } from '../dtos/airports-search.dto';
+import {
+  AIRPORT_SEARCH_ORDER_BY,
+  buildAirportSearchCursorWhere,
+  buildAirportSearchWhere,
+  DEFAULT_AIRPORT_SEARCH_LIMIT,
+  MAX_AIRPORT_SEARCH_LIMIT,
+  type AirportSearchCursor,
+} from '../utils/airport-search.util';
+import { decodeCursor, encodeCursor } from 'src/shared/utils/cursor.util';
 
-interface AirportLocation {
-  id: string;
-  name: string;
-  city: string | null;
-  country: string;
-  iataCode: string | null;
-}
+const airportSelect = {
+  id: true,
+  name: true,
+  city: true,
+  country: true,
+  iataCode: true,
+  icaoCode: true,
+  latitude: true,
+  longitude: true,
+} satisfies Prisma.AirportSelect;
 
 @Injectable()
 export class AirportsService {
-  private airportCache: AirportLocation[] | null = null;
+  constructor(private readonly prisma: PrismaService) {}
 
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly logger: Logger,
-  ) {}
+  async searchAirports(dto: SearchLocationsDto) {
+    const query = dto.q?.trim();
 
-  async searchAirports(keyword: string) {
-    if (!keyword || keyword.length < 2) {
+    if (!query || query.length < 2) {
       throw new BadRequestException('Keyword must be at least 2 characters');
     }
 
-    const normalizedKeyword = keyword.trim().toLowerCase();
-    const airports = await this.loadAirports();
+    const limit = Math.min(dto.limit ?? DEFAULT_AIRPORT_SEARCH_LIMIT, MAX_AIRPORT_SEARCH_LIMIT);
+    const searchWhere = buildAirportSearchWhere(query, dto.country);
+    const decoded = decodeCursor<AirportSearchCursor>(dto.cursor);
 
-    const results = airports
-      .filter((airport) => {
-        const name = airport.name.toLowerCase();
-        const city = airport.city?.toLowerCase() ?? '';
-        const iata = airport.iataCode?.toLowerCase() ?? '';
+    const where: Prisma.AirportWhereInput = decoded
+      ? {
+          AND: [searchWhere, buildAirportSearchCursorWhere(decoded)],
+        }
+      : searchWhere;
 
-        return (
-          name.includes(normalizedKeyword) ||
-          city.includes(normalizedKeyword) ||
-          iata.startsWith(normalizedKeyword)
-        );
-      })
-      .slice(0, 10);
+    const airports = await this.prisma.airport.findMany({
+      where,
+      select: airportSelect,
+      orderBy: AIRPORT_SEARCH_ORDER_BY,
+      take: limit + 1,
+    });
+
+    const hasNextPage = airports.length > limit;
+    if (hasNextPage) {
+      airports.pop();
+    }
+
+    const last = airports[airports.length - 1];
+    const nextCursor =
+      last && hasNextPage
+        ? encodeCursor<AirportSearchCursor>({
+            city: last.city,
+            name: last.name,
+            id: last.id,
+          })
+        : null;
 
     return {
-      data: results,
+      data: airports,
       meta: {
-        count: results.length,
+        count: airports.length,
+        limit,
+        hasNextPage,
+        nextCursor,
       },
     };
-  }
-
-  private async loadAirports(): Promise<AirportLocation[]> {
-    if (this.airportCache) {
-      return this.airportCache;
-    }
-
-    try {
-      this.airportCache = await this.prisma.airport.findMany({
-        select: {
-          id: true,
-          name: true,
-          city: true,
-          country: true,
-          iataCode: true,
-        },
-        orderBy: {
-          name: 'asc',
-        },
-      });
-
-      return this.airportCache;
-    } catch (error) {
-      this.logger.error('Failed to load airport cache', {
-        message: error.message,
-      });
-      throw error;
-    }
   }
 }

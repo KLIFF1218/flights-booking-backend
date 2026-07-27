@@ -1,37 +1,45 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, IsString, MaxLength, MinLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsStrongPassword, PASSWORD_POLICY_MESSAGE } from './password-policy';
 
 export class RegisterDto {
   @ApiProperty({
     example: 'john.doe@example.com',
-    description: 'Уникальный адрес электронной почты пользователя',
+    description: 'Unique user email address',
   })
-  @IsNotEmpty({ message: 'Поле email обязательно' })
-  @IsEmail({}, { message: 'Некорректный формат email' })
-  email: string;
+  @IsNotEmpty({ message: 'Email is required' })
+  @IsEmail({}, { message: 'Invalid email format' })
+  email!: string;
 
   @ApiProperty({
     example: 'StrongPass123!',
-    description:
-      'Пароль пользователя (от 8 до 128 символов, рекомендуется использовать спецсимволы)',
+    description: PASSWORD_POLICY_MESSAGE,
   })
-  @IsNotEmpty({ message: 'Поле password обязательно' })
-  @IsString()
-  @MinLength(8, { message: 'Пароль должен содержать не меньше 8 символов' })
-  @MaxLength(128, { message: 'Пароль должен содержать не больше 128 символов' })
-  password: string;
+  @IsNotEmpty({ message: 'Password is required' })
+  @IsStrongPassword()
+  password!: string;
 
   @ApiProperty({
     example: 'John',
-    description: 'Имя пользователя',
+    description: 'User first name',
   })
   @IsString()
-  firstName: string;
+  firstName!: string;
 
   @ApiProperty({
     example: 'Doe',
-    description: 'Фамилия пользователя',
+    description: 'User last name',
   })
   @IsString()
-  lastName: string;
+  lastName!: string;
+
+  @ApiPropertyOptional({ example: 'en', description: 'UI locale at registration' })
+  @IsOptional()
+  @IsString()
+  locale?: string;
+
+  @ApiPropertyOptional({ example: 'USD', description: 'Preferred search currency' })
+  @IsOptional()
+  @IsString()
+  currency?: string;
 }

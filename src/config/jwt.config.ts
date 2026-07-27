@@ -1,9 +1,10 @@
 import type { ConfigService } from '@nestjs/config';
 import type { JwtModuleOptions } from '@nestjs/jwt';
+import { getJwtAccessSecret } from './jwt-secrets';
 
 export const getJwtConfig = (configService: ConfigService): JwtModuleOptions => {
   return {
-    secret: configService.getOrThrow<string>('JWT_SECRET'),
+    secret: getJwtAccessSecret(configService),
     signOptions: {
       algorithm: 'HS256',
     },
