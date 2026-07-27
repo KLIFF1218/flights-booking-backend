@@ -5,3 +5,14 @@ export interface VkIdTokenResponse {
   expires_in: number;
   token_type: string;
 }
+
+export interface VkExchangeTokenResponse {
+  access_token?: string;
+  user_id?: string | number;
+}
+
+export interface VkUserInfo {
+  email?: string;
+  first_name?: string;
+  last_name?: string;
+}

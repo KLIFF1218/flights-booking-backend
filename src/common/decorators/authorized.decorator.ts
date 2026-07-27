@@ -10,7 +10,7 @@ export const Authorized = createParamDecorator(
     const user = req.user;
 
     if (!user) {
-      throw new UnauthorizedException('Пользователь не авторизован');
+      throw new UnauthorizedException('User is not authorized');
     }
 
     return data ? user[data] : user;

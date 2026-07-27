@@ -1,34 +1,26 @@
 import { Module } from '@nestjs/common';
 import { TicketingService } from './services/ticketing.service';
-import { TicketingController } from './controllers/ticketing.controller';
-import { BullModule } from '@nestjs/bullmq';
+import { TicketIssuerService } from './services/ticket-issuer.service';
 import { PdfModule } from 'src/infra/pdf/pdf.module';
 import { S3Module } from 'src/infra/storage/s3.module';
 import { TicketingProcessor } from './ticketing.processor';
 import { MailModule } from 'src/infra/mail/mail.module';
 import { OutboxModule } from 'src/infra/outbox/outbox.module';
+import { BookingsCacheModule } from '../bookings/bookings-cache.module';
+import { TicketingQueueModule } from './ticketing-queue.module';
+import { BookingMetricsModule } from '../bookings/metrics/booking-metrics.module';
 
 @Module({
   imports: [
-    BullModule.registerQueue({
-      name: 'ticketing',
-      defaultJobOptions: {
-        attempts: 5,
-        backoff: {
-          type: 'exponential',
-          delay: 30_000,
-        },
-        removeOnComplete: true,
-        removeOnFail: false,
-      },
-    }),
+    TicketingQueueModule,
     PdfModule,
     S3Module,
     MailModule,
     OutboxModule,
+    BookingsCacheModule,
+    BookingMetricsModule,
   ],
-  controllers: [TicketingController],
-  providers: [TicketingService, TicketingProcessor],
-  exports: [BullModule, TicketingService],
+  providers: [TicketingService, TicketIssuerService, TicketingProcessor],
+  exports: [TicketingQueueModule, TicketingService],
 })
 export class TicketingModule {}

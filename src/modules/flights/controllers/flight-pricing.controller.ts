@@ -1,32 +1,33 @@
 import { Body, Controller, Post } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiBearerAuth,
-  ApiBody,
-  ApiOperation,
-  ApiOkResponse,
-  ApiUnauthorizedResponse,
-  ApiForbiddenResponse,
-} from '@nestjs/swagger';
+import { ApiTags, ApiBody, ApiOperation, ApiOkResponse } from '@nestjs/swagger';
+import { RateLimit, RATE_LIMIT_PRESETS } from 'src/common/decorators';
 import { FlightsPricingService } from '../services/flight-pricing.service';
 import { FlightPricingRequestDto } from '../dtos/flight-pricing.request.dto';
-import { FlightPricingResponse } from '../dtos/flight-pricing.response.dto';
-import { Protected, Roles } from 'src/common/decorators';
-import { Role } from '@prisma/client';
+import {
+  FlightPricingResponseDto,
+  type FlightPricingResponse,
+} from '../dtos/flight-pricing.response.dto';
+import { ApiBadRequestError, ApiNotFoundError } from 'src/common/swagger/api-responses.decorator';
 
 @ApiTags('Flight Pricing')
-@ApiBearerAuth()
-@Protected()
-@Roles(Role.USER, Role.ADMIN)
 @Controller({ path: 'flight/pricing', version: '1' })
 export class FlightPricingController {
   constructor(private readonly pricingService: FlightsPricingService) {}
+
   @Post()
-  @ApiOperation({ summary: 'Рассчитать стоимость билета' })
+  @RateLimit(RATE_LIMIT_PRESETS.flightPricing)
+  @ApiOperation({
+    summary: 'Calculate ticket price',
+    description:
+      'Builds an indicative quote from internal inventory (pricingMode=indicative, source=INTERNAL_DB). Child/infant multipliers and YQ/YR-style tax lines are configurable demo rules — not ATPCO. Seat FX uses the quote-locked rate table.',
+  })
   @ApiBody({ type: FlightPricingRequestDto })
-  @ApiOkResponse({ description: 'Результат расчёта стоимости полёта' })
-  @ApiUnauthorizedResponse({ description: 'Требуется аутентификация' })
-  @ApiForbiddenResponse({ description: 'Требуется роль USER или ADMIN' })
+  @ApiOkResponse({
+    type: FlightPricingResponseDto,
+    description: 'Indicative flight pricing quote from internal inventory',
+  })
+  @ApiBadRequestError()
+  @ApiNotFoundError('Offer not found')
   async price(@Body() dto: FlightPricingRequestDto): Promise<FlightPricingResponse> {
     return await this.pricingService.price(dto.searchId, dto.offerId, dto.options);
   }

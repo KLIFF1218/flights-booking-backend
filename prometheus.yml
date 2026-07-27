@@ -2,14 +2,6 @@ global:
   scrape_interval: 5s
 
 scrape_configs:
-  - job_name: 'flights-app'
-    static_configs:
-      - targets:
-          - 'app:3001'
-    metrics_path: '/metrics'
-    scrape_interval: 5s
-    scrape_timeout: 5s
-
   - job_name: 'postgres'
     static_configs:
       - targets:
@@ -19,18 +11,20 @@ scrape_configs:
     static_configs:
       - targets:
           - 'redis-exporter:9121'
-  
+
   - job_name: 'prometheus'
     static_configs:
       - targets:
           - 'prometheus:9090'
 
-  - job_name: 'flights-app'
+  - job_name: 'max-airline'
     static_configs:
       - targets:
           - 'app:3001'
     metrics_path: '/metrics'
     scrape_interval: 5s
     scrape_timeout: 5s
-
-
+    # Production: set METRICS_AUTH_TOKEN in .env and uncomment:
+    # authorization:
+    #   type: Bearer
+    #   credentials: YOUR_METRICS_AUTH_TOKEN

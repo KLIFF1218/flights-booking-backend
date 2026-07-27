@@ -47,6 +47,21 @@ export const RATE_LIMIT_PRESETS = {
     duration: 60,
     keyPrefix: 'rl:auth-vk',
   },
+  authVerify: {
+    points: 5,
+    duration: 60,
+    keyPrefix: 'rl:auth-verify',
+  },
+  authForgotPassword: {
+    points: 5,
+    duration: 60,
+    keyPrefix: 'rl:auth-forgot',
+  },
+  authResetPassword: {
+    points: 5,
+    duration: 60,
+    keyPrefix: 'rl:auth-reset',
+  },
   webhook: {
     points: 20,
     duration: 60,

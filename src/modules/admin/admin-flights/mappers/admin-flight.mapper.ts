@@ -1,4 +1,5 @@
 import { PassengerType, type Prisma, TravelClass } from '@prisma/client';
+import { formatDateInTimeZone } from 'src/modules/flights/utils/timezone-date.util';
 
 export const adminFlightFullInclude = {
   flight: {
@@ -16,6 +17,11 @@ export const adminFlightFullInclude = {
     },
   },
   fares: true,
+  _count: {
+    select: {
+      bookings: true,
+    },
+  },
 } satisfies Prisma.FlightInstanceInclude;
 
 export type AdminFlightInstanceRecord = Prisma.FlightInstanceGetPayload<{
@@ -39,6 +45,8 @@ export function mapStatusToDb(status: string) {
 
 export function mapAdminFlightToDto(flight: AdminFlightInstanceRecord) {
   const durationMinutes = flight.flight?.durationMinutes ?? 0;
+  const departureTimezone = flight.flight?.departureAirport?.timezone ?? 'UTC';
+  const arrivalTimezone = flight.flight?.arrivalAirport?.timezone ?? 'UTC';
 
   const arrivalDate = new Date(flight.departureDate);
   arrivalDate.setMinutes(arrivalDate.getMinutes() + durationMinutes);
@@ -54,11 +62,15 @@ export function mapAdminFlightToDto(flight: AdminFlightInstanceRecord) {
     id: flight.id,
     departureDate: flight.departureDate,
     arrivalDate,
+    departureTimezone,
+    arrivalTimezone,
+    departureLocalDate: formatDateInTimeZone(flight.departureDate, departureTimezone),
     durationMinutes,
     price: Number(adultFare?.basePrice ?? 0),
     currency: adultFare?.currency ?? null,
     totalSeats,
     availableSeats: flight.seatsAvailable ?? 0,
+    bookingsCount: flight._count?.bookings ?? 0,
     status: flight.status,
     delayMinutes: flight.delayMinutes ?? 0,
     flightNumber: flight.flight?.flightNumber ?? '—',

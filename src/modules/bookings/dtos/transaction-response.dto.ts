@@ -4,11 +4,11 @@ import { Currency, PaymentProvider, TransactionStatus } from '@prisma/client';
 export class TransactionResponseDto {
   @ApiProperty({
     example: 'clu3ya4x0003lz0q2az7x9n20',
-    description: 'ID транзакции',
+    description: 'Transaction ID',
   })
   id!: string;
 
-  @ApiProperty({ example: 450.0, description: 'Сумма транзакции' })
+  @ApiProperty({ example: 450.0, description: 'Transaction amount' })
   amount!: number;
 
   @ApiProperty({ enum: Object.values(Currency), example: Currency.USD })

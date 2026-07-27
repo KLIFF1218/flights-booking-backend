@@ -9,11 +9,15 @@ generator client {
 model User {
   id String @id @default(cuid())
 
-  email     String? @unique
-  password  String?
-  firstName String?
-  lastName  String?
-  vkId      String? @unique
+  email           String?   @unique
+  password        String?
+  firstName       String?
+  lastName        String?
+  lastLoginAt     DateTime?
+  emailVerifiedAt DateTime?
+
+  vkId     String? @unique
+  accounts Account[]
 
   status UserStatus @default(ACTIVE)
   phone  String?
@@ -23,18 +27,95 @@ model User {
 
   city String?
 
-  currency Currency @default(RUB)
+  currency Currency @default(USD)
 
   role Role @default(USER)
 
   refreshTokens RefreshToken[]
   userDevices   UserDevice[]
+  emailTokens   EmailToken[]
 
   bookings     Booking[]
   transactions Transaction[]
+  savedPassengers SavedPassengerProfile[]
+  bookingIdempotencyRecords BookingIdempotencyRecord[]
+  notifications UserNotification[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+enum EmailTokenPurpose {
+  EMAIL_VERIFY
+  PASSWORD_RESET
+}
+
+model EmailToken {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  purpose   EmailTokenPurpose
+  tokenHash String
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, purpose])
+  @@index([tokenHash])
+  @@index([expiresAt])
+}
+
+model SavedPassengerProfile {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  label     String?
+  isPrimary Boolean @default(false)
+
+  passengerType PassengerType
+
+  firstName String
+  lastName  String
+  gender    String
+
+  birthDate   DateTime
+  nationality String
+  birthPlace  String?
+
+  passportNumber       String
+  passportIssuanceDate DateTime
+  passportExpiry       DateTime
+
+  email            String?
+  phoneCountryCode String?
+  phoneNumber      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, passportNumber])
+  @@index([userId])
+}
+
+model UserNotification {
+  id            String               @id @default(cuid())
+  userId        String
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookingId     String?
+  type          UserNotificationType
+  title         String
+  message       String
+  sourceEventId String?              @unique
+  readAt        DateTime?
+  createdAt     DateTime             @default(now())
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, readAt])
 }
 
 model UserDevice {
@@ -45,6 +126,7 @@ model UserDevice {
 
   userAgent String?
   ip        String?
+  lastIp    String?
 
   refreshTokens RefreshToken[]
 
@@ -63,9 +145,14 @@ model RefreshToken {
   deviceInfo String?
   ip         String?
 
-  expiresAt    DateTime
-  revokedAt    DateTime?
-  replacedById String?
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  revokedReason RevokedReason?
+  replacedById  String?
+
+  replacedBy RefreshToken? @relation("Replace", fields: [replacedById], references: [id])
+
+  previous RefreshToken[] @relation("Replace")
 
   userDeviceId String
   userDevice   UserDevice @relation(fields: [userDeviceId], references: [id], onDelete: Cascade)
@@ -75,6 +162,9 @@ model RefreshToken {
 
   @@index([userId])
   @@index([expiresAt])
+  @@index([userDeviceId])
+  @@index([revokedAt])
+  @@index([userId, revokedAt])
 }
 
 model AirportAlias {
@@ -94,10 +184,11 @@ model Airport {
   id String @id @default(cuid())
 
   name    String
-  city    String?
+  city    String
   country String
 
-  aliases AirportAlias[]
+  aliases  AirportAlias[]
+  timezone String         @default("UTC")
 
   iataCode String  @unique @db.VarChar(3)
   icaoCode String? @db.VarChar(4)
@@ -167,6 +258,7 @@ model Flight {
 
   createdAt DateTime @default(now())
 
+  @@index([departureAirportId])
   @@index([departureAirportId, arrivalAirportId])
   @@index([arrivalAirportId])
 }
@@ -178,6 +270,7 @@ model FlightSegment {
   flight   Flight @relation(fields: [flightId], references: [id], onDelete: Cascade)
 
   segmentOrder Int
+  dayOffset    Int @default(0)
 
   departureAirportId String
   departureAirport   Airport @relation("SegmentDeparture", fields: [departureAirportId], references: [id])
@@ -185,8 +278,8 @@ model FlightSegment {
   arrivalAirportId String
   arrivalAirport   Airport @relation("SegmentArrival", fields: [arrivalAirportId], references: [id])
 
-  departureTime DateTime
-  arrivalTime   DateTime
+  departureTime String
+  arrivalTime   String
 
   carrierCode  String
   flightNumber String
@@ -198,9 +291,11 @@ model FlightSegment {
 
   createdAt DateTime @default(now())
 
-  seatAssignments SeatAssignment[] // ← ДОБАВИТЬ
+  seatAssignments SeatAssignment[]
   seatHolds       SeatHold[]
 
+  @@index([departureAirportId])
+  @@index([arrivalAirportId])
   @@index([flightId, segmentOrder])
 }
 
@@ -230,7 +325,10 @@ model FlightInstance {
   createdAt DateTime  @default(now())
   bookings  Booking[]
 
+  @@index([flightId])
+  @@index([departureDate])
   @@index([departureDate, flightId])
+  @@index([status, departureDate])
 }
 
 model FlightFare {
@@ -243,18 +341,27 @@ model FlightFare {
 
   travelClass TravelClass
 
+  /// Demo fare family (not ATPCO branded fares).
+  fareBrand FareBrand @default(LIGHT)
+
   basePrice Decimal
 
   currency Currency
 
   checkedBags Int @default(0)
 
+  /// Demo commercial rules for the brand (not airline GDS conditions).
+  changeable Boolean @default(false)
+
+  refundable Boolean @default(false)
+
   fareBasis String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([flightInstanceId, passengerType, travelClass])
+  @@unique([flightInstanceId, passengerType, travelClass, fareBrand])
+  @@index([flightInstanceId, passengerType, travelClass, fareBrand])
 }
 
 model AircraftLayout {
@@ -280,8 +387,15 @@ model SeatTemplate {
   x Int
   y Int
 
-  seatType String? // WINDOW, AISLE
-  deck     Int
+  seatType    SeatType
+  travelClass TravelClass @default(ECONOMY)
+  deck        Int
+
+  isExitRow      Boolean @default(false)
+  isExtraLegroom Boolean @default(false)
+  isPremium      Boolean @default(false)
+
+  @@unique([layoutId, x, y])
 }
 
 model FacilityTemplate {
@@ -289,10 +403,12 @@ model FacilityTemplate {
   layoutId String
   layout   AircraftLayout @relation(fields: [layoutId], references: [id])
 
-  code String // LA, BK, GAL
+  type FacilityType
 
   x Int
   y Int
+
+  @@unique([layoutId, x, y])
 }
 
 model FlightSeat {
@@ -303,11 +419,15 @@ model FlightSeat {
 
   seatNumber String
 
-  x    Int
-  y    Int
+  x Int
+  y Int
+
   deck Int
 
-  seatType        String?
+  seatType SeatType?
+
+  travelClass TravelClass @default(ECONOMY)
+
   seatAssignments SeatAssignment[]
 
   price Decimal @default(0)
@@ -317,10 +437,18 @@ model FlightSeat {
   bookingId String?
   booking   Booking? @relation(fields: [bookingId], references: [id])
 
-  createdAt DateTime   @default(now())
+  createdAt DateTime @default(now())
+
   seatHolds SeatHold[]
 
+  isExitRow Boolean @default(false)
+
+  isExtraLegroom Boolean @default(false)
+
+  isPremium Boolean @default(false)
+
   @@unique([flightInstanceId, seatNumber])
+  @@unique([flightInstanceId, x, y])
 }
 
 model SeatHold {
@@ -343,6 +471,7 @@ model SeatHold {
   createdAt DateTime @default(now())
 
   @@unique([flightSeatId, segmentId])
+  @@index([bookingId])
   @@index([expiresAt])
 }
 
@@ -376,7 +505,7 @@ model Booking {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
 
-  provider BookingProvider @default(AMADEUS)
+  provider BookingProvider @default(INTERNAL)
 
   status BookingStatus @default(PNR_CREATED)
 
@@ -406,9 +535,8 @@ model Booking {
   flightSeats FlightSeat[]
   seatHolds   SeatHold[]
 
-  @@index([pnrLocator])
-  @@index([flightOrderId])
-  @@index([status])
+  @@index([status, expiresAt])
+  @@index([userId, createdAt])
 }
 
 model Traveler {
@@ -435,6 +563,10 @@ model Traveler {
   phoneNumber      String?
 
   passengerType PassengerType
+
+  accompanyingTravelerId String?
+  accompanyingTraveler   Traveler?  @relation("TravelerAccompaniment", fields: [accompanyingTravelerId], references: [id], onDelete: SetNull)
+  accompaniedInfants     Traveler[] @relation("TravelerAccompaniment")
 
   basePrice Decimal
   currency  Currency
@@ -475,6 +607,7 @@ model SeatAssignment {
 
   @@unique([travelerId, segmentId])
   @@unique([flightSeatId, segmentId])
+  @@index([bookingId])
 }
 
 model Transaction {
@@ -497,11 +630,152 @@ model Transaction {
   externalId   String?
   providerMeta Json?
 
+  paymentExpiresAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([externalId])
   @@index([status])
+  @@index([paymentExpiresAt])
+}
+
+// Immutable domain event log (Kafka audit projection)
+model DomainEvent {
+  id             String   @id @default(cuid())
+  eventId        String
+  eventType      String
+  aggregateType  String
+  aggregateId    String
+  bookingId      String?
+  payload        Json
+  occurredAt     DateTime
+  idempotencyKey String   @unique
+  kafkaTopic     String
+  kafkaPartition Int
+  kafkaOffset    String
+  createdAt      DateTime @default(now())
+
+  @@index([bookingId, occurredAt])
+  @@index([aggregateId, occurredAt])
+  @@index([eventType, occurredAt])
+}
+
+// CQRS read model: daily booking funnel metrics from domain events
+model BookingAnalyticsDaily {
+  date              DateTime @id @db.Date
+  bookingsCreated   Int      @default(0)
+  paymentsSucceeded Int      @default(0)
+  paymentsFailed    Int      @default(0)
+  bookingsCanceled  Int      @default(0)
+  bookingsExpired   Int      @default(0)
+  ticketsIssued     Int      @default(0)
+  ticketingFailed   Int      @default(0)
+  flightsDelayed    Int      @default(0)
+  flightsCancelled  Int      @default(0)
+  paymentVolume     Decimal  @default(0) @db.Decimal(14, 2)
+  updatedAt         DateTime @updatedAt
+}
+
+model ProcessedAnalyticsEvent {
+  eventId     String   @id
+  eventType   String
+  occurredAt  DateTime
+  processedAt DateTime @default(now())
+
+  @@index([occurredAt])
+}
+
+// Outbox table for reliable message publication
+model OutboxMessage {
+  id String @id @default(cuid())
+
+  aggregateId   String? // optional domain aggregate id (bookingId, etc.)
+  aggregateType String? // e.g. Booking
+
+  topic     String // destination topic or exchange
+  key       String? // optional partitioning key
+  payload   Json // message payload
+  transport EnumTransport // KAFKA, RABBITMQ, or INTERNAL
+  status    OutboxStatus  @default(PENDING)
+  attempts  Int           @default(0)
+  lastError String?
+
+  createdAt   DateTime  @default(now())
+  availableAt DateTime  @default(now())
+  processedAt DateTime?
+
+  @@index([status, availableAt])
+  @@index([aggregateId])
+}
+
+enum IdempotencyStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model IdempotencyOperation {
+  id String @id @default(cuid())
+
+  key String
+
+  provider PaymentProvider
+
+  operation String
+
+  status IdempotencyStatus
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([provider, key])
+}
+
+model BookingIdempotencyRecord {
+  id String @id @default(cuid())
+
+  userId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  key String
+
+  status IdempotencyStatus
+
+  bookingId String?
+  response  Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, key])
+  @@index([userId, status])
+}
+
+enum OutboxStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+}
+
+enum FacilityType {
+  GALLEY
+  LAVATORY
+  EXIT
+  STAIRS
+}
+
+enum SeatType {
+  WINDOW
+  AISLE
+  MIDDLE
+}
+
+enum EnumTransport {
+  KAFKA
+  RABBITMQ
+  INTERNAL
 }
 
 enum UserStatus {
@@ -510,11 +784,47 @@ enum UserStatus {
   INACTIVE
 }
 
+enum Provider {
+  LOCAL
+  VK
+  GOOGLE
+  GITHUB
+  APPLE
+}
+
+model Account {
+  id String @id @default(cuid())
+
+  provider Provider
+
+  providerAccountId String
+
+  userId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([provider, providerAccountId])
+}
+
 enum SeatStatus {
   AVAILABLE
   RESERVED
   BOOKED
   BLOCKED
+}
+
+enum UserNotificationType {
+  FLIGHT_DELAYED
+  FLIGHT_CANCELLED
+  BOOKING_CREATED
+  PAYMENT_SUCCEEDED
+  PAYMENT_FAILED
+  TICKETING_FAILED
+  TICKET_ISSUED
+  BOOKING_CANCELED
+  BOOKING_EXPIRED
 }
 
 enum FlightStatus {
@@ -531,14 +841,22 @@ enum TravelClass {
   FIRST
 }
 
+/// Indicative fare families for the internal inventory simulator.
+enum FareBrand {
+  LIGHT
+  FLEX
+}
+
 enum PassengerType {
   ADULT
   CHILD
   HELD_INFANT
+  SEATED_INFANT
 }
 
 enum BookingProvider {
-  AMADEUS
+  /// Booking created against local inventory (no external GDS).
+  INTERNAL
   MOCK
 }
 
@@ -582,5 +900,13 @@ enum TicketStatus {
 
 enum Role {
   USER
+  ADMIN
+}
+
+enum RevokedReason {
+  LOGOUT
+  REFRESH_ROTATION
+  REPLAY_ATTACK
+  PASSWORD_CHANGED
   ADMIN
 }

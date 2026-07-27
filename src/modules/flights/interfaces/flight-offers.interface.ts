@@ -1,4 +1,4 @@
-import type { Currency, PassengerType } from '@prisma/client';
+import type { Currency, FareBrand, PassengerType } from '@prisma/client';
 import type { BuiltSegment } from 'src/modules/bookings/types/segment.types';
 
 export type TravelClass = 'ECONOMY' | 'PREMIUM_ECONOMY' | 'BUSINESS' | 'FIRST';
@@ -7,13 +7,13 @@ export interface FlightDirection {
   origin: string;
   destination: string;
   dateFrom: string;
-  dateTo?: string;
 }
 
 export interface PassengerCounts {
   adults: number;
   children?: number;
   infants?: number;
+  seatedInfants?: number;
 }
 
 export interface FlightSearchParams {
@@ -59,22 +59,48 @@ export interface FlightOfferCard {
   totalDurationMinutes: number;
 }
 
+export type FlightOfferLegDirection = 'OUTBOUND' | 'INBOUND';
+
+export interface FlightOfferLeg {
+  flightInstanceId: string;
+  direction: FlightOfferLegDirection;
+}
+
+export interface FeeLineItem {
+  amount: string;
+  type: string;
+}
+
+export interface TaxLineItem {
+  amount: string;
+  code: string;
+}
+
 export interface FlightOffer {
   id: string;
+  /** Display/pricing currency from the search request (target currency for converted fares). */
+  currencyCode?: Currency;
+  legs?: FlightOfferLeg[];
   numberOfBookableSeats: number;
   price: {
     total: string;
     currency: Currency;
-    base?: string;
-    grandTotal?: string;
-    fees?: any[];
+    base: string;
+    grandTotal: string;
+    taxes?: TaxLineItem[];
+    fees?: FeeLineItem[];
   };
 
   itineraries: Itinerary[];
 
   oneWay?: boolean;
   lastTicketingDate?: string;
+  /** Always INTERNAL_DB in this project (own inventory simulator). */
   source?: string;
+  /** Demo fare family selected for this offer (default LIGHT). */
+  fareBrand?: FareBrand;
+  changeable?: boolean;
+  refundable?: boolean;
   instantTicketingRequired?: boolean;
   nonHomogeneous?: boolean;
   type?: string;
@@ -121,6 +147,8 @@ export interface TravelerPricing {
     currency: Currency;
     total: string;
     base: string;
+    taxes?: TaxLineItem[];
+    fees?: FeeLineItem[];
   };
 
   fareDetailsBySegment: FareDetailsBySegment[];
@@ -140,4 +168,6 @@ export interface FareDetailsBySegment {
   };
 
   brandName: string | null;
+  changeable?: boolean;
+  refundable?: boolean;
 }

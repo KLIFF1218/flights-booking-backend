@@ -1,3 +1,7 @@
+/**
+ * Legacy OTA-shaped pricing cache payload used by FlightsSearchStore.
+ * Runtime pricing is produced by DbPricingProvider from PostgreSQL inventory.
+ */
 export interface FlightOffersPricingResponse {
   data: FlightOffersPricingData;
   dictionaries?: Dictionaries;

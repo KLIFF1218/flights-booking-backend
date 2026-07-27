@@ -4,19 +4,19 @@ import { IsEmail, IsNotEmpty, IsString, MaxLength, MinLength } from 'class-valid
 export class LoginDto {
   @ApiProperty({
     example: 'john.doe@example.com',
-    description: 'Email, указанный при регистрации пользователя',
+    description: 'Email used during user registration',
   })
-  @IsNotEmpty({ message: 'Поле email обязательно' })
-  @IsEmail({}, { message: 'Некорректный формат email' })
+  @IsNotEmpty({ message: 'Email is required' })
+  @IsEmail({}, { message: 'Invalid email format' })
   email!: string;
 
   @ApiProperty({
     example: 'StrongPass123!',
-    description: 'Пароль, указанный при регистрации (от 8 до 128 символов)',
+    description: 'Password used during registration',
   })
-  @IsNotEmpty({ message: 'Поле password обязательно' })
+  @IsNotEmpty({ message: 'Password is required' })
   @IsString()
-  @MinLength(8, { message: 'Пароль должен содержать не меньше 8 символов' })
-  @MaxLength(128, { message: 'Пароль должен содержать не больше 128 символов' })
+  @MinLength(8, { message: 'Password must be at least 8 characters' })
+  @MaxLength(128, { message: 'Password must be at most 128 characters' })
   password!: string;
 }

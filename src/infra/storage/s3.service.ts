@@ -14,7 +14,13 @@ import { S3UploadOptions } from './interfaces/s3-upload-options';
 
 @Injectable()
 export class S3Service {
+  /** Server → storage (Docker DNS: minio:9000, or cloud endpoint). */
   private readonly client: S3Client;
+  /**
+   * Browser-facing signed URLs. Must be reachable from the user's machine
+   * (localhost:9000 for MinIO, or the same cloud endpoint in prod).
+   */
+  private readonly signingClient: S3Client;
   private readonly bucket: string;
 
   constructor(
@@ -22,9 +28,12 @@ export class S3Service {
     private readonly logger: Logger,
   ) {
     const s3Bucket = this.config.getOrThrow<string>('S3_BUCKET');
-    const s3Configuration: S3ClientConfig = {
+    const endpoint = this.config.getOrThrow<string>('S3_ENDPOINT');
+    const publicEndpoint =
+      this.config.get<string>('S3_PUBLIC_ENDPOINT')?.trim() || endpoint;
+
+    const shared: Omit<S3ClientConfig, 'endpoint'> = {
       region: this.config.get<string>('S3_REGION', 'ru-central1'),
-      endpoint: this.config.getOrThrow<string>('S3_ENDPOINT'),
       credentials: {
         accessKeyId: this.config.getOrThrow<string>('S3_ACCESS_KEY'),
         secretAccessKey: this.config.getOrThrow<string>('S3_SECRET_KEY'),
@@ -33,7 +42,19 @@ export class S3Service {
     };
 
     this.bucket = s3Bucket;
-    this.client = new S3Client(s3Configuration);
+    this.client = new S3Client({ ...shared, endpoint });
+    this.signingClient =
+      publicEndpoint === endpoint
+        ? this.client
+        : new S3Client({ ...shared, endpoint: publicEndpoint });
+
+    if (publicEndpoint !== endpoint) {
+      this.logger.log({
+        msg: 'S3 internal and public endpoints differ',
+        endpoint,
+        publicEndpoint,
+      });
+    }
   }
 
   async uploadFile(options: S3UploadOptions): Promise<string> {
@@ -98,7 +119,8 @@ export class S3Service {
         ResponseContentType: 'application/pdf',
       });
 
-      return await getSignedUrl(this.client, command, { expiresIn });
+      // Sign with the public client so Host in the URL matches what the browser opens.
+      return await getSignedUrl(this.signingClient, command, { expiresIn });
     } catch (error) {
       this.logger.error({
         msg: 'Presigned URL generation failed',
@@ -106,6 +128,31 @@ export class S3Service {
         error: error instanceof Error ? error.message : String(error),
       });
       throw new InternalServerErrorException('Link generation failed');
+    }
+  }
+
+  async getFileBuffer(key: string): Promise<Buffer> {
+    try {
+      const response = await this.client.send(
+        new GetObjectCommand({
+          Bucket: this.bucket,
+          Key: key,
+        }),
+      );
+
+      if (!response.Body) {
+        throw new Error('Empty S3 object body');
+      }
+
+      const bytes = await response.Body.transformToByteArray();
+      return Buffer.from(bytes);
+    } catch (error) {
+      this.logger.error({
+        msg: 'S3 file download failed',
+        key,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw new InternalServerErrorException('File download failed');
     }
   }
 
@@ -118,7 +165,7 @@ export class S3Service {
         }),
       );
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   }

@@ -1,24 +1,49 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { Logger } from 'nestjs-pino';
-import { createHash, randomUUID } from 'node:crypto';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 
 import { SearchFlightsDto } from '../dtos';
-import { FlightCardResponse } from '../interfaces/flight-response.dto';
-import { FlightOffer, Itinerary } from '../interfaces/flight-offers.interface';
+import type { FlightsQueryDto } from '../dtos/flights-query.dto';
 
-import { FlightsSearchStore } from '../services/flights-cache.service';
-
+import { EMPTY_SEARCH_TTL_SECONDS, FlightsSearchStore } from '../services/flights-cache.service';
 import { MetricsService } from '../../../infra/metrics/metrics.service';
 
 import {
   FLIGHT_SEARCH_PROVIDER,
   type FlightSearchProvider,
 } from '../providers/flight-search.provider';
-
-type CursorPayload = {
-  price: number;
-  id: string;
-};
+import { FlightOfferMapper } from './flight-offer.mapper';
+import {
+  FlightSearchCursorPayload,
+  PreprocessedFlightOffer,
+  SortType,
+} from '../types/flights.types';
+import { computeBestScores } from '../utils/best-score.util';
+import {
+  appendFiltersToSearchParams,
+  applyFlightFilters,
+  buildFilters,
+  parseFlightSearchFilters,
+} from '../utils/filter.util';
+import type { FlightSearchFilters } from '../utils/filter.util';
+import { preprocessOffers } from '../utils/preprocess-offers.util';
+import { getFlightSortStrategy, sortFlightOffers } from '../utils/flight-sort-strategies.util';
+import {
+  buildCursor,
+  cursorToFakeOffer,
+  decodeCursor,
+  encodeCursor,
+} from '../../../shared/utils/cursor.util';
+import { buildSearchQueryKey } from '../utils/search-query-key.util';
+import { validatePassengerCounts } from '../utils/passenger-counts.util';
+import { assertValidSearchDirections } from '../utils/validate-search-directions.util';
+import { resolveDefaultSearchCurrencyCode } from 'src/modules/payment/utils/payment-defaults.util';
+import { FlightScheduleSyncService } from './flight-schedule-sync.service';
 
 @Injectable()
 export class FlightsService {
@@ -30,276 +55,392 @@ export class FlightsService {
     private readonly provider: FlightSearchProvider,
 
     private readonly searchStore: FlightsSearchStore,
+    private readonly offerMapper: FlightOfferMapper,
     private readonly metrics: MetricsService,
-    private readonly logger: Logger,
+    private readonly scheduleSync: FlightScheduleSyncService,
   ) {}
 
-  async createSearch(data: SearchFlightsDto) {
-    const timer = this.metrics.flightSearchDuration.startTimer();
+  async createSearch(data: SearchFlightsDto, query: FlightsQueryDto = {}) {
+    const sort = query.sort ?? 'CHEAPEST';
+    const filters = parseFlightSearchFilters(query);
+    const limit = this.normalizeLimit(query.limit);
+    validatePassengerCounts(data.passengers);
+    assertValidSearchDirections(data.directions);
 
-    const cachedSearch = await this.getCachedSearch(this.buildSearchQueryKey(data));
-
-    if (cachedSearch) {
-      this.metrics.flightSearchCounter.inc({
-        status: 'cache',
-      });
-
-      timer({
-        status: 'cache',
-      });
-
-      return cachedSearch;
+    if (!data.currencyCode) {
+      data.currencyCode = resolveDefaultSearchCurrencyCode();
     }
 
-    const response = await this.provider.searchFlights({
-      directions: data.directions,
-      passengers: data.passengers,
-      travelClass: data.travelClass,
-      limit: FlightsService.DEFAULT_LIMIT,
-    });
+    const { origin, destination } = this.getSearchRouteLabels(data);
+    const timer = this.metrics.flightSearchDuration.startTimer({ origin });
+    let recorded = false;
 
-    const rawOffers = this.sortOffers(response?.data ?? []);
-    const searchId = randomUUID();
+    const finish = (status: 'cache' | 'success' | 'failure') => {
+      if (recorded) {
+        return;
+      }
+      recorded = true;
+      this.metrics.recordFlightSearch(origin, destination, status);
+      timer({ origin, status });
+    };
 
-    await this.searchStore.saveSearchResults(searchId, rawOffers);
-    await this.searchStore.saveSearchIdByQuery(this.buildSearchQueryKey(data), searchId);
+    try {
+      const queryKey = buildSearchQueryKey(data);
+      const cachedSearch = await this.getCachedSearch(queryKey, sort, filters, limit);
 
-    const result = this.buildSearchResponse({
-      searchId,
-      offers: rawOffers,
-      limit: FlightsService.DEFAULT_LIMIT,
-    });
+      if (cachedSearch) {
+        this.metrics.recordRedisCache('flight_search', 'hit');
+        finish('cache');
+        return cachedSearch;
+      }
 
-    this.metrics.flightSearchCounter.inc({
-      status: 'success',
-    });
+      this.metrics.recordRedisCache('flight_search', 'miss');
 
-    timer({
-      status: 'success',
-    });
+      let lockAcquired = await this.searchStore.acquireSearchLock(queryKey);
+      this.metrics.recordRedisLock('flight_search', lockAcquired ? 'acquired' : 'busy');
 
-    return result;
+      if (!lockAcquired) {
+        const peerSearch = await this.waitForPeerSearch(queryKey, sort, filters, limit);
+        if (peerSearch) {
+          this.metrics.recordRedisCache('flight_search', 'hit');
+          finish('cache');
+          return peerSearch;
+        }
+
+        lockAcquired = await this.searchStore.acquireSearchLock(queryKey);
+        this.metrics.recordRedisLock('flight_search', lockAcquired ? 'acquired' : 'busy');
+        if (!lockAcquired) {
+          finish('failure');
+          throw new ServiceUnavailableException(
+            'Flight search is still in progress. Please retry in a few seconds.',
+          );
+        }
+      }
+
+      try {
+        const cachedAfterLock = await this.getCachedSearch(queryKey, sort, filters, limit);
+        if (cachedAfterLock) {
+          this.metrics.recordRedisCache('flight_search', 'hit');
+          finish('cache');
+          return cachedAfterLock;
+        }
+
+        const response = await this.provider.searchFlights({
+          directions: data.directions,
+          passengers: data.passengers,
+          travelClass: data.travelClass,
+          currencyCode: data.currencyCode,
+          limit: FlightsService.DEFAULT_LIMIT,
+        });
+
+        const rawOffers = response?.data ?? [];
+        const preprocessedOffers = preprocessOffers(rawOffers);
+        const searchId = randomUUID();
+
+        const searchContext = {
+          passengers: {
+            adults: data.passengers.adults,
+            children: data.passengers.children ?? 0,
+            infants: data.passengers.infants ?? 0,
+            seatedInfants: data.passengers.seatedInfants ?? 0,
+          },
+          travelClass: data.travelClass,
+          currencyCode: data.currencyCode,
+        };
+
+        const cacheTtlSeconds =
+          preprocessedOffers.length === 0 ? EMPTY_SEARCH_TTL_SECONDS : undefined;
+
+        const { expiresAt } = await this.searchStore.saveSearchResults(
+          searchId,
+          preprocessedOffers,
+          queryKey,
+          searchContext,
+          cacheTtlSeconds,
+        );
+
+        let effectiveSearchId: string = searchId;
+        let offersForResponse = preprocessedOffers;
+        let effectiveExpiresAt = expiresAt;
+
+        const savedQueryMapping = await this.searchStore.saveSearchIdByQueryIfAbsent(
+          queryKey,
+          searchId,
+          cacheTtlSeconds,
+        );
+
+        if (!savedQueryMapping) {
+          const existingSearchId = await this.searchStore.getSearchIdByQuery(queryKey);
+          if (existingSearchId) {
+            effectiveSearchId = existingSearchId;
+            await this.searchStore.deleteSearchResults(searchId);
+
+            const existing = await this.searchStore.getSearchResults(existingSearchId);
+            if (existing) {
+              offersForResponse = existing.offers as PreprocessedFlightOffer[];
+              effectiveExpiresAt = existing.expiresAt;
+            }
+          }
+        }
+
+        computeBestScores(offersForResponse);
+
+        const sortedOffers = sortFlightOffers(offersForResponse, sort);
+
+        const result = this.buildSearchResponse({
+          searchId: effectiveSearchId,
+          offers: sortedOffers,
+          limit,
+          expiresAt: effectiveExpiresAt,
+          sort,
+          searchHash: queryKey,
+          filters,
+        });
+
+        finish('success');
+
+        return result;
+      } finally {
+        if (lockAcquired) {
+          await this.searchStore.releaseSearchLock(queryKey);
+        }
+      }
+    } catch (error) {
+      finish('failure');
+      throw error;
+    }
   }
 
-  async getSearchPage(searchId: string, cursor?: string, limit: number = 20) {
-    const cachedOffers = await this.searchStore.getSearchResults(searchId);
-
-    if (!cachedOffers) {
-      throw new NotFoundException('Search expired or not found');
+  private async waitForPeerSearch(
+    queryHash: string,
+    sort: SortType,
+    filters: FlightSearchFilters,
+    limit: number,
+  ) {
+    const searchId = await this.searchStore.waitForSearchIdByQuery(queryHash);
+    if (!searchId) {
+      return null;
     }
 
-    const safeLimit = this.normalizeLimit(limit);
+    return this.getCachedSearch(queryHash, sort, filters, limit);
+  }
 
+  private getSearchRouteLabels(data: SearchFlightsDto): { origin: string; destination: string } {
+    const firstDirection = data.directions[0];
+
+    if (!firstDirection) {
+      return { origin: 'unknown', destination: 'unknown' };
+    }
+
+    return {
+      origin: firstDirection.origin,
+      destination: firstDirection.destination,
+    };
+  }
+
+  async getSearchPage(searchId: string, query: FlightsQueryDto = {}) {
+    const cached = await this.searchStore.getSearchResults(searchId);
+
+    if (!cached) {
+      throw new NotFoundException('Search expired or not found. Please initiate a new search.');
+    }
+
+    const safeLimit = this.normalizeLimit(query.limit);
+    const sort = query.sort ?? 'CHEAPEST';
+    const filters = parseFlightSearchFilters(query);
+    const preprocessedOffers = cached.offers as PreprocessedFlightOffer[];
+    const liveOffers = await this.scheduleSync.refreshOffersFromDatabase(preprocessedOffers, {
+      passengers: cached.context?.passengers,
+    });
+    computeBestScores(liveOffers);
+
+    const effectiveSort = this.resolveSortForCursor(query.cursor, sort, cached.queryHash);
+    const sortedOffers = sortFlightOffers(liveOffers, effectiveSort);
+    const searchHash = cached.queryHash;
     return this.buildSearchResponse({
       searchId,
-      offers: cachedOffers,
-      cursor,
+      offers: sortedOffers,
+      expiresAt: cached.expiresAt,
+      cursor: query.cursor,
       limit: safeLimit,
+      sort: effectiveSort,
+      searchHash,
+      filters,
     });
   }
 
-  private async getCachedSearch(queryHash: string) {
+  private async getCachedSearch(
+    queryHash: string,
+    sort: SortType,
+    filters: FlightSearchFilters,
+    limit: number,
+  ) {
     const cachedSearchId = await this.searchStore.getSearchIdByQuery(queryHash);
 
     if (!cachedSearchId) {
       return null;
     }
 
-    const cachedOffers = await this.searchStore.getSearchResults(cachedSearchId);
+    const cached = await this.searchStore.getSearchResults(cachedSearchId);
 
-    if (!cachedOffers) {
+    if (!cached) {
       await this.searchStore.deleteSearchIdByQuery(queryHash);
-
       return null;
     }
 
+    const preprocessedOffers = cached.offers as PreprocessedFlightOffer[];
+    const liveOffers = await this.scheduleSync.refreshOffersFromDatabase(preprocessedOffers, {
+      passengers: cached.context?.passengers,
+    });
+    computeBestScores(liveOffers);
+    const sortedOffers = sortFlightOffers(liveOffers, sort);
+
     return this.buildSearchResponse({
       searchId: cachedSearchId,
-      offers: cachedOffers,
-      limit: FlightsService.DEFAULT_LIMIT,
+      offers: sortedOffers,
+      expiresAt: cached.expiresAt,
+      limit,
+      sort,
+      searchHash: queryHash,
+      filters,
     });
+  }
+
+  private resolveSortForCursor(
+    cursor: string | undefined,
+    requestedSort: SortType,
+    searchHash: string,
+  ): SortType {
+    if (!cursor) {
+      return requestedSort;
+    }
+
+    const decoded = decodeCursor<FlightSearchCursorPayload>(cursor);
+    if (!decoded) {
+      return requestedSort;
+    }
+
+    if (decoded.searchHash !== searchHash) {
+      throw new BadRequestException('Cursor search mismatch');
+    }
+
+    return decoded.sort ?? requestedSort;
   }
 
   private buildSearchResponse(params: {
     searchId: string;
-    offers: FlightOffer[];
+    offers: PreprocessedFlightOffer[];
     cursor?: string;
     limit: number;
+    expiresAt?: string;
+    sort: SortType;
+    searchHash: string;
+    filters?: FlightSearchFilters;
   }) {
-    const { searchId, offers, cursor, limit } = params;
+    const { searchId, offers, cursor, limit, sort, searchHash, expiresAt, filters = {} } = params;
 
-    const { data, meta, nextCursor } = this.paginateOffers(offers, cursor, limit);
+    const filteredOffers = applyFlightFilters(offers, filters);
+    const page = this.paginateOffers(filteredOffers, cursor, limit, sort, searchHash);
 
     return {
       searchId,
-
-      data: data.map((offer) => this.mapOfferToCard(offer)),
-
+      data: this.mapOffersToCards(page.data),
       meta: {
-        total: offers.length,
-        ...meta,
+        total: filteredOffers.length,
+        ...page.meta,
       },
-
-      links: {
-        next: nextCursor
-          ? `/api/v1/flights/search/${searchId}?cursor=${nextCursor}&limit=${limit}`
-          : null,
-      },
-
-      filters: this.buildFilters(offers),
+      links: this.buildLinks(searchId, page.nextCursor, limit, sort, filters),
+      expiresAt: expiresAt ?? null,
+      filters: buildFilters(offers),
     };
   }
 
-  private mapOfferToCard(offer: FlightOffer): FlightCardResponse {
-    const routes = offer.itineraries.map((itinerary) => {
-      const segments = this.mapSegments(itinerary);
+  private paginateOffers(
+    items: PreprocessedFlightOffer[],
+    cursor: string | undefined,
+    limit: number,
+    sort: SortType,
+    searchHash: string,
+  ) {
+    const decoded = decodeCursor<FlightSearchCursorPayload>(cursor);
+    const effectiveSort = this.resolveSortForCursor(cursor, sort, searchHash);
 
-      const firstSegment = segments[0];
-      const lastSegment = segments[segments.length - 1];
+    let startIndex = 0;
 
-      return {
-        availableSeats: offer.numberOfBookableSeats,
+    if (decoded) {
+      if (decoded.searchHash !== searchHash) {
+        throw new BadRequestException('Cursor search mismatch');
+      }
 
-        from: firstSegment.from,
-        to: lastSegment.to,
-
-        departure: {
-          airport: firstSegment.from,
-          time: firstSegment.departureTime,
-          date: firstSegment.departureTime,
-        },
-
-        arrival: {
-          airport: lastSegment.to,
-          time: lastSegment.arrivalTime,
-          date: lastSegment.arrivalTime,
-        },
-
-        durationMinutes: this.parseDuration(itinerary.duration),
-
-        stops: Math.max(segments.length - 1, 0),
-
-        stopCodes: segments.map((segment) => segment.to).slice(0, -1),
-
-        airline: firstSegment.airline,
-        airlineIata: firstSegment.airlineIata,
-
-        segments,
-      };
-    });
-
-    return {
-      offerId: offer.id,
-
-      price: {
-        total: Number(offer.price.total),
-        currency: offer.price.currency,
-      },
-
-      routes,
-
-      totalDurationMinutes: routes.reduce((sum, route) => sum + route.durationMinutes, 0),
-    };
-  }
-
-  private mapSegments(itinerary: Itinerary) {
-    return itinerary.segments.map((segment) => ({
-      from: segment.departure.iataCode,
-      to: segment.arrival.iataCode,
-
-      departureTime: segment.departure.at,
-      arrivalTime: segment.arrival.at,
-
-      airline: segment.carrierName ?? segment.carrierCode,
-      airlineIata: segment.carrierCode,
-
-      flightNumber: segment.number,
-
-      durationMinutes: this.parseDuration(segment.duration),
-    }));
-  }
-
-  private parseDuration(duration?: string): number {
-    if (!duration) {
-      return 0;
+      startIndex = this.findStartIndex(items, decoded, effectiveSort);
     }
 
-    const hours = Number(duration.match(/(\d+)H/)?.[1] ?? 0);
+    const pageItems = items.slice(startIndex, startIndex + limit);
 
-    const minutes = Number(duration.match(/(\d+)M/)?.[1] ?? 0);
+    const hasNextPage = items.length > startIndex + limit;
+    const lastItem = pageItems[pageItems.length - 1];
 
-    return hours * 60 + minutes;
+    const nextCursor =
+      hasNextPage && lastItem
+        ? encodeCursor<FlightSearchCursorPayload>(buildCursor(lastItem, effectiveSort, searchHash))
+        : null;
+
+    return {
+      data: pageItems,
+      meta: {
+        limit,
+        hasNextPage,
+      },
+      nextCursor,
+    };
   }
 
-  private buildFilters(offers: FlightOffer[]) {
-    const airlinesMap = new Map<string, number>();
-    const stopsMap = new Map<number, number>();
+  private buildLinks(
+    searchId: string,
+    nextCursor: string | null,
+    limit: number,
+    sort: SortType,
+    filters: FlightSearchFilters,
+  ) {
+    const filterParams = new URLSearchParams();
+    appendFiltersToSearchParams(filterParams, filters);
 
-    let maxPrice = 0;
+    const filterQuery = filterParams.toString();
+    const filterSuffix = filterQuery ? `&${filterQuery}` : '';
 
-    for (const offer of offers) {
-      const firstItinerary = offer.itineraries[0];
+    return {
+      next: nextCursor
+        ? `/api/v1/flights/search/${searchId}?cursor=${nextCursor}&limit=${limit}&sort=${sort}${filterSuffix}`
+        : null,
+    };
+  }
 
-      if (!firstItinerary) {
-        continue;
+  private mapOffersToCards(offers: PreprocessedFlightOffer[]) {
+    return offers.map((offer) => this.offerMapper.toCard(offer));
+  }
+
+  private findStartIndex(
+    items: PreprocessedFlightOffer[],
+    cursor: FlightSearchCursorPayload,
+    sort: SortType,
+  ): number {
+    const strategy = getFlightSortStrategy(sort);
+
+    const cursorOffer = cursorToFakeOffer(cursor);
+
+    for (let i = 0; i < items.length; i++) {
+      const cmp = strategy.compare(items[i], cursorOffer as PreprocessedFlightOffer);
+
+      if (cmp > 0) {
+        return i;
       }
 
-      const firstSegment = firstItinerary.segments[0];
-
-      if (!firstSegment) {
-        continue;
-      }
-
-      const airline = firstSegment.carrierName ?? firstSegment.carrierCode;
-
-      airlinesMap.set(airline, (airlinesMap.get(airline) ?? 0) + 1);
-
-      const stops = Math.max(firstItinerary.segments.length - 1, 0);
-
-      stopsMap.set(stops, (stopsMap.get(stops) ?? 0) + 1);
-
-      const price = Number(offer.price.total);
-
-      if (!Number.isNaN(price)) {
-        maxPrice = Math.max(maxPrice, price);
+      if (cmp === 0 && items[i].id > cursor.id) {
+        return i;
       }
     }
 
-    return {
-      airlines: Array.from(airlinesMap.entries()).map(([name, count]) => ({
-        name,
-        count,
-      })),
-
-      stops: Array.from(stopsMap.entries()).map(([stops, count]) => ({
-        stops,
-        count,
-      })),
-
-      maxPrice,
-    };
-  }
-
-  private buildSearchQueryKey(data: SearchFlightsDto) {
-    const normalized = {
-      directions: data.directions.map((direction) => ({
-        origin: direction.origin,
-        destination: direction.destination,
-        dateFrom: direction.dateFrom,
-      })),
-
-      passengers: {
-        adults: data.passengers.adults,
-        children: data.passengers.children ?? 0,
-        infants: data.passengers.infants ?? 0,
-      },
-
-      travelClass: data.travelClass,
-
-      currencyCode: data.currencyCode ?? null,
-    };
-
-    return createHash('sha256').update(JSON.stringify(normalized)).digest('hex');
+    return items.length;
   }
 
   private normalizeLimit(limit?: number) {
@@ -307,105 +448,5 @@ export class FlightsService {
       Math.max(Number(limit) || FlightsService.DEFAULT_LIMIT, 1),
       FlightsService.MAX_LIMIT,
     );
-  }
-
-  private decodeCursor(cursor?: string): CursorPayload | null {
-    if (!cursor) {
-      return null;
-    }
-
-    try {
-      const decoded = Buffer.from(cursor, 'base64url').toString();
-
-      const parsed: unknown = JSON.parse(decoded);
-
-      if (
-        typeof parsed !== 'object' ||
-        parsed === null ||
-        !('price' in parsed) ||
-        !('id' in parsed)
-      ) {
-        throw new BadRequestException('Invalid cursor');
-      }
-
-      const payload = parsed as CursorPayload;
-
-      if (typeof payload.price !== 'number' || typeof payload.id !== 'string') {
-        throw new BadRequestException('Invalid cursor');
-      }
-
-      return payload;
-    } catch {
-      throw new BadRequestException('Invalid cursor');
-    }
-  }
-
-  private encodeCursor(payload: CursorPayload) {
-    return Buffer.from(JSON.stringify(payload)).toString('base64url');
-  }
-
-  private sortOffers(offers: FlightOffer[]) {
-    return [...offers].sort((a, b) => {
-      const priceDiff = Number(a.price.total) - Number(b.price.total);
-
-      if (priceDiff !== 0) {
-        return priceDiff;
-      }
-
-      return a.id.localeCompare(b.id);
-    });
-  }
-
-  private paginateOffers(
-    items: FlightOffer[],
-    cursor?: string,
-    limit: number = FlightsService.DEFAULT_LIMIT,
-  ) {
-    const decoded = this.decodeCursor(cursor);
-
-    let filteredItems = items;
-
-    if (decoded) {
-      filteredItems = items.filter((offer) => {
-        const price = Number(offer.price.total);
-
-        if (price > decoded.price) {
-          return true;
-        }
-
-        if (price === decoded.price) {
-          return offer.id > decoded.id;
-        }
-
-        return false;
-      });
-    }
-
-    const sliced = filteredItems.slice(0, limit + 1);
-
-    const hasNextPage = sliced.length > limit;
-
-    const pageItems = sliced.slice(0, limit);
-
-    const lastItem = pageItems[pageItems.length - 1];
-
-    const nextCursor =
-      hasNextPage && lastItem
-        ? this.encodeCursor({
-            price: Number(lastItem.price.total),
-            id: lastItem.id,
-          })
-        : null;
-
-    return {
-      data: pageItems,
-
-      meta: {
-        limit,
-        hasNextPage,
-      },
-
-      nextCursor,
-    };
   }
 }

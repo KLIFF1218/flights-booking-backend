@@ -2,7 +2,10 @@ import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nes
 import { Observable } from 'rxjs';
 import { tap, catchError } from 'rxjs/operators';
 import { Counter, Histogram, register } from 'prom-client';
-import { Request, Response } from 'express';
+import type { Request, Response } from 'express';
+import { HttpException } from '@nestjs/common';
+
+const INTERNAL_ROUTES = new Set(['/metrics', '/health', '/health/ready']);
 
 @Injectable()
 export class MetricsInterceptor implements NestInterceptor {
@@ -34,7 +37,7 @@ export class MetricsInterceptor implements NestInterceptor {
     });
   }
 
-  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     if (context.getType() !== 'http') {
       return next.handle();
     }
@@ -43,8 +46,12 @@ export class MetricsInterceptor implements NestInterceptor {
     const request = http.getRequest<Request>();
     const response = http.getResponse<Response>();
 
-    const { method, url } = request;
-    const route = url.split('?')[0];
+    const { method } = request;
+    const route = this.resolveRoute(request);
+
+    if (INTERNAL_ROUTES.has(route)) {
+      return next.handle();
+    }
 
     const startTime = Date.now();
 
@@ -54,19 +61,52 @@ export class MetricsInterceptor implements NestInterceptor {
         const status = response.statusCode;
 
         this.httpRequestCounter.labels(method, route, String(status)).inc();
-
         this.httpRequestDuration.labels(method, route).observe(duration);
       }),
-      catchError((error) => {
+      catchError((error: unknown) => {
         const duration = (Date.now() - startTime) / 1000;
-        const status = error?.status ?? 500;
+        const status =
+          error instanceof HttpException
+            ? error.getStatus()
+            : typeof error === 'object' &&
+                error !== null &&
+                'status' in error &&
+                typeof (error as { status?: unknown }).status === 'number'
+              ? (error as { status: number }).status
+              : 500;
 
+        this.httpRequestCounter.labels(method, route, String(status)).inc();
         this.httpErrorCounter.labels(method, route, String(status)).inc();
-
         this.httpRequestDuration.labels(method, route).observe(duration);
 
-        throw error;
+        if (error instanceof Error) {
+          throw error;
+        }
+
+        throw new Error(typeof error === 'string' ? error : 'Request failed');
       }),
     );
+  }
+
+  private resolveRoute(request: Request): string {
+    const expressRoute = (request.route as { path?: string } | undefined)?.path;
+
+    if (typeof expressRoute === 'string') {
+      const baseUrl = request.baseUrl ?? '';
+      const route = `${baseUrl}${expressRoute}`.replace(/\/+/g, '/');
+      return route || '/';
+    }
+
+    return this.normalizePath(request.path);
+  }
+
+  private normalizePath(path: string): string {
+    return path
+      .replace(
+        /\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi,
+        '/:id',
+      )
+      .replace(/\/c[a-z0-9]{20,}/gi, '/:id')
+      .replace(/\/\d+/g, '/:id');
   }
 }

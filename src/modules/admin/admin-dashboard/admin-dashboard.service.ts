@@ -4,10 +4,14 @@ import { DashboardStatsDto } from './dtos/admin-dashboard-stats.dto';
 import { BookingStatus, TransactionStatus } from '@prisma/client';
 import type { BookingSnapshot } from 'src/modules/bookings/interfaces/booking-snapshot.interface';
 import { extractRouteFromSnapshot } from 'src/modules/bookings/utils/booking-snapshot.util';
+import { DomainAnalyticsService } from 'src/infra/analytics/domain-analytics.service';
 
 @Injectable()
 export class AdminDashboardService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly domainAnalytics: DomainAnalyticsService,
+  ) {}
 
   async getDashboardStats(): Promise<DashboardStatsDto> {
     const now = new Date();
@@ -153,6 +157,8 @@ export class AdminDashboardService {
       .sort((a, b) => b.bookings - a.bookings)
       .slice(0, 5);
 
+    const eventAnalytics = await this.domainAnalytics.getEventAnalytics(30);
+
     return {
       totalUsers,
       totalBookings,
@@ -165,6 +171,7 @@ export class AdminDashboardService {
       monthlyRevenue,
       bookingsByStatus,
       topRoutes,
+      eventAnalytics,
     };
   }
 

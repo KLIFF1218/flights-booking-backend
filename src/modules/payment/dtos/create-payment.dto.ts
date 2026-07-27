@@ -1,11 +1,15 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { type Currency, type PaymentProvider } from '@prisma/client';
 
 export class PassengersDto {
-  adults: number;
+  @ApiProperty({ example: 1, minimum: 1 })
+  adults!: number;
 
-  infants: number;
+  @ApiProperty({ example: 0, minimum: 0 })
+  infants!: number;
 
-  children: number;
+  @ApiProperty({ example: 0, minimum: 0 })
+  children!: number;
 }
 
 export enum TripClass {
@@ -15,15 +19,23 @@ export enum TripClass {
   FIRST = 'O',
 }
 
+/** Legacy / internal payment shape — not currently bound to an HTTP controller. */
 export class CreatePaymentDto {
-  tripClass: TripClass;
+  @ApiProperty({ enum: TripClass, example: TripClass.ECONOMY })
+  tripClass!: TripClass;
 
-  bookingId: string;
-  provider: PaymentProvider;
+  @ApiProperty({ example: 'clbooking0123456789' })
+  bookingId!: string;
 
-  userId: string;
+  @ApiProperty({ example: 'STRIPE' })
+  provider!: PaymentProvider;
 
-  flightId: string;
+  @ApiProperty({ example: 'cluser0123456789' })
+  userId!: string;
 
-  currency: Currency;
+  @ApiProperty({ example: 'clflight0123456789' })
+  flightId!: string;
+
+  @ApiProperty({ example: 'RUB' })
+  currency!: Currency;
 }

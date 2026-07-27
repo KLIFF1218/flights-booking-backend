@@ -1,13 +1,44 @@
-import { BadRequestException, Injectable, NotFoundException, Inject } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { Logger } from 'nestjs-pino';
-import { BookingProvider, BookingStatus, Prisma } from '@prisma/client';
+import { BookingProvider, BookingStatus, EnumTransport, PaymentProvider, Prisma } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { addMinutes } from 'date-fns';
+import { BOOKING_EXPIRATION_MINUTES } from '../constants/booking-expiration.constants';
 import { FlightsSearchStore } from 'src/modules/flights/services/flights-cache.service';
-import { DbPricingProvider } from 'src/modules/flights/services/DbPricingProvider.service';
+import {
+  FLIGHT_PRICING_PROVIDER,
+  type FlightPricingProvider,
+} from 'src/modules/flights/providers/flight-pricing.provider';
 import { BookingSnapshot } from '../interfaces/booking-snapshot.interface';
 import { FlightOffer } from 'src/modules/flights/interfaces/flight-offers.interface';
+import {
+  extractFlightInstanceIds,
+  resolvePrimaryFlightInstanceId,
+} from 'src/modules/flights/utils/offer-flight-instances.util';
+import { MetricsService } from 'src/infra/metrics/metrics.service';
+import { BookingMetricsService } from '../metrics/booking-metrics.service';
+import { resolveBookingMetricReason } from '../metrics/booking-metrics.util';
+import {
+  assertPaymentProviderSupported,
+  resolvePaymentProvider,
+} from '../utils/booking-snapshot.util';
+import { assertPaymentProviderCurrencyCompatible } from 'src/modules/payment/utils/payment-defaults.util';
+import {
+  assertPriceWithinTolerance,
+  assertPricingQuoteActive,
+} from 'src/modules/flights/utils/pricing-quote.util';
+import {
+  assertFlightInstancesBookable,
+  syncOfferScheduleFromPricing,
+} from 'src/modules/flights/utils/offer-schedule.util';
+import {
+  reserveFlightInstanceInventory,
+  resolveSeatsToReserve,
+} from '../utils/booking-inventory.util';
+import { SeatMapsService } from 'src/modules/seatmaps/services/seatmap.service';
+import { isSeatSelectionRequired } from '../utils/seatmap-availability.util';
+import { OutboxService } from 'src/infra/outbox/outbox.service';
 
 @Injectable()
 export class BookingCreationService {
@@ -15,7 +46,12 @@ export class BookingCreationService {
     private readonly prisma: PrismaService,
     private readonly logger: Logger,
     private readonly searchStore: FlightsSearchStore,
-    private readonly pricingProvider: DbPricingProvider,
+    @Inject(FLIGHT_PRICING_PROVIDER)
+    private readonly pricingProvider: FlightPricingProvider,
+    private readonly metrics: MetricsService,
+    private readonly bookingMetrics: BookingMetricsService,
+    private readonly seatMapsService: SeatMapsService,
+    private readonly outbox: OutboxService,
   ) {}
 
   private generatePnr(): string {
@@ -48,150 +84,180 @@ export class BookingCreationService {
   async createBooking(
     userId: string,
     flightOffer: FlightOffer,
-    travelers?: any[],
-    searchId?: string,
-    offerId?: string,
+    searchId: string,
+    offerId: string,
+    paymentProvider?: PaymentProvider,
   ) {
-    console.log('travelers is :', travelers);
-    console.log('start to book in booking-creating.service.ts');
-    const originalOffer = await this.searchStore.getOffer(searchId!, offerId!);
+    const resolvedPaymentProvider = resolvePaymentProvider(paymentProvider);
+    assertPaymentProviderSupported(resolvedPaymentProvider);
+
+    this.logger.debug({ userId, searchId, offerId }, 'Creating booking');
+    const originalOffer = await this.searchStore.getOffer(searchId, offerId);
 
     if (!originalOffer) {
       throw new NotFoundException('Offer not found');
     }
 
-    const flightInstanceId = flightOffer.id;
+    const flightInstanceIds = extractFlightInstanceIds(originalOffer);
+    const primaryFlightInstanceId = resolvePrimaryFlightInstanceId(originalOffer);
 
-    const flightInstance = await this.prisma.flightInstance.findUnique({
-      where: { id: flightInstanceId },
-      include: { fares: true, seats: true },
+    const flightInstances = await this.prisma.flightInstance.findMany({
+      where: { id: { in: flightInstanceIds } },
+      include: {
+        fares: true,
+        seats: true,
+        flight: {
+          include: {
+            airline: true,
+          },
+        },
+      },
     });
 
-    if (!flightInstance) {
+    if (flightInstances.length !== flightInstanceIds.length) {
+      const foundIds = new Set(flightInstances.map((instance) => instance.id));
+      const missingIds = flightInstanceIds.filter((id) => !foundIds.has(id));
+
+      throw new NotFoundException(`Flight instance not found: ${missingIds.join(', ')}`);
+    }
+
+    assertFlightInstancesBookable(flightInstances);
+
+    const primaryFlightInstance = flightInstances.find(
+      (instance) => instance.id === primaryFlightInstanceId,
+    );
+
+    if (!primaryFlightInstance) {
       throw new NotFoundException('Flight instance not found');
     }
 
-    const latestPricing = await this.pricingProvider.price(searchId!, offerId!);
+    const quotedPricing = await this.searchStore.getLastPricing(searchId, offerId);
 
-    const clientPrice = Number(flightOffer.price.grandTotal ?? flightOffer.price.total);
-
-    const actualPrice = Number(latestPricing.price.total);
-
-    if (Math.abs(clientPrice - actualPrice) > 0.01) {
-      this.logger.warn({
-        clientPrice,
-        actualPrice,
-      });
-
-      throw new BadRequestException('Price has changed');
+    if (quotedPricing) {
+      assertPricingQuoteActive(quotedPricing);
     }
 
-    const expiresAt = addMinutes(new Date(), 30);
+    const latestPricing = await this.pricingProvider.price(searchId, offerId, {
+      lockedFxRates: quotedPricing?.fxRates,
+    });
+
+    if (quotedPricing) {
+      assertPriceWithinTolerance(
+        Number(quotedPricing.price.total),
+        Number(latestPricing.price.total),
+      );
+    }
+
+    const actualPrice = Number(latestPricing.price.total);
+    assertPaymentProviderCurrencyCompatible(
+      resolvedPaymentProvider,
+      latestPricing.price.currency,
+    );
+
+    const expiresAt = addMinutes(new Date(), BOOKING_EXPIRATION_MINUTES);
+    const airlineCode = primaryFlightInstance.flight.airline.code;
+
+    const seatMap = await this.seatMapsService.getSeatMapByOffer({ searchId, offerId });
 
     const snapshot: BookingSnapshot = {
-      offer: originalOffer,
+      offer: syncOfferScheduleFromPricing(originalOffer, latestPricing),
       pricing: latestPricing,
+      searchId,
+      offerId,
+      paymentProvider: resolvedPaymentProvider,
+      seatSelectionRequired: isSeatSelectionRequired(seatMap),
     };
 
-    return this.prisma.$transaction(async (tx) => {
-      const pnr = await this.generateUniquePnr(tx);
-      const booking = await tx.booking.create({
-        data: {
-          userId,
+    const startedAt = Date.now();
 
-          provider: BookingProvider.MOCK,
-          status: BookingStatus.PNR_CREATED,
-          pnrLocator: pnr,
-          flightOrderId: `${Date.now()}`,
+    try {
+      const booking = await this.prisma.$transaction(async (tx) => {
+        const seatsToReserve = resolveSeatsToReserve(snapshot);
+        try {
+          await reserveFlightInstanceInventory(tx, flightInstanceIds, seatsToReserve);
+          this.bookingMetrics.recordInventoryReserved();
+        } catch (inventoryError) {
+          this.bookingMetrics.recordInventoryReservationFailed(
+            resolveBookingMetricReason(inventoryError),
+          );
+          throw inventoryError;
+        }
 
-          expiresAt,
-          lastTicketingDate: expiresAt,
+        const pnr = await this.generateUniquePnr(tx);
+        const createdBooking = await tx.booking.create({
+          data: {
+            userId,
 
-          totalPrice: actualPrice,
-          currency: flightOffer.price.currency,
+            provider: BookingProvider.INTERNAL,
+            status: BookingStatus.PNR_CREATED,
+            pnrLocator: pnr,
+            flightOrderId: `${Date.now()}`,
 
-          snapshot: snapshot as unknown as Prisma.InputJsonValue,
+            expiresAt,
+            lastTicketingDate: expiresAt,
 
-          flightInstanceId,
-        },
+            totalPrice: actualPrice,
+            currency: latestPricing.price.currency,
+
+            snapshot: snapshot as unknown as Prisma.InputJsonValue,
+
+            flightInstanceId: primaryFlightInstanceId,
+          },
+        });
+
+        this.logger.debug(
+          {
+            bookingId: createdBooking.id,
+            pnr,
+            flightInstanceId: primaryFlightInstanceId,
+            flightInstanceIds,
+          },
+          'Booking created',
+        );
+
+        const occurredAt = new Date().toISOString();
+
+        await this.outbox.enqueue(tx, {
+          aggregateId: createdBooking.id,
+          aggregateType: 'Booking',
+          topic: 'booking.created',
+          key: createdBooking.id,
+          payload: {
+            bookingId: createdBooking.id,
+            userId,
+            pnr,
+            status: BookingStatus.PNR_CREATED,
+            totalPrice: actualPrice,
+            currency: flightOffer.price.currency,
+            occurredAt,
+          },
+          transport: EnumTransport.KAFKA,
+        });
+
+        return createdBooking;
       });
 
-      // const travelerPricings = latestPricing.travelers;
-      // if (travelers && travelers.length > 0) {
-      //   await tx.traveler.createMany({
-      //     data: travelers.map((t, index) => {
-      //       const travelerPricing = travelerPricings[index];
-
-      //       if (!travelerPricing) {
-      //         throw new BadRequestException(`Pricing for traveler ${index + 1} not found`);
-      //       }
-
-      //       console.log('t this is a: ', t);
-
-      //       const document = t.documents?.[0];
-      //       const phone = t.contact?.phones?.[0];
-
-      //       const fareDetails = travelerPricing.fareDetailsBySegment?.[0];
-
-      //       if (!document) {
-      //         throw new BadRequestException(
-      //           `Traveler document missing for ${t.name?.firstName ?? 'unknown'}`,
-      //         );
-      //       }
-
-      //       return {
-      //         bookingId: booking.id,
-
-      //         firstName: t.name.firstName,
-      //         lastName: t.name.lastName,
-      //         gender: t.gender,
-
-      //         birthDate: new Date(t.dateOfBirth),
-
-      //         nationality: document.nationality,
-      //         birthPlace: document.birthPlace,
-
-      //         passportNumber: document.number,
-      //         passportIssuanceDate: new Date(document.issuanceDate),
-      //         passportExpiry: new Date(document.expiryDate),
-
-      //         email: t.contact?.emailAddress ?? null,
-      //         phoneCountryCode: phone?.countryCallingCode ?? null,
-      //         phoneNumber: phone?.number ?? null,
-
-      //         passengerType: travelerPricing.travelerType as PassengerType,
-
-      //         basePrice: Number(travelerPricing.price.base),
-
-      //         currency: travelerPricing.price.currency,
-      //         travelClass: fareDetails?.cabin ?? 'ECONOMY',
-
-      //         fareBasis: fareDetails?.fareBasis ?? null,
-
-      //         checkedBags: fareDetails?.includedCheckedBags?.quantity ?? 0,
-      //       };
-      //     }),
-      //   });
-
-      //   const created = await tx.traveler.findMany({
-      //     where: {
-      //       bookingId: booking.id,
-      //     },
-      //   });
-
-      //   console.dir(created, { depth: null });
-      // }
-
-      this.logger.debug(
-        {
-          bookingId: booking.id,
-          pnr,
-          flightInstanceId,
-        },
-        'Booking created',
+      this.bookingMetrics.recordBookingCreated(
+        resolvedPaymentProvider,
+        BookingStatus.PNR_CREATED,
+        airlineCode,
+      );
+      this.bookingMetrics.observeBookingCreationDuration(
+        (Date.now() - startedAt) / 1000,
+        resolvedPaymentProvider,
+        airlineCode,
+      );
+      this.metrics.recordBookingValue(
+        Math.round(actualPrice * 100),
+        flightOffer.price.currency,
+        airlineCode,
       );
 
       return booking;
-    });
+    } catch (error) {
+      const reason = resolveBookingMetricReason(error);
+      this.bookingMetrics.recordOperationFailed('create', reason);
+      throw error;
+    }
   }
 }

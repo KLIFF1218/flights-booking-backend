@@ -1,44 +1,34 @@
-import { Controller, Get } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiOkResponse,
-  ApiBearerAuth,
-  ApiForbiddenResponse,
-  ApiUnauthorizedResponse,
-} from '@nestjs/swagger';
-import { AdminAirportsService } from './admin-airports.service';
-import { Protected, Roles } from 'src/common/decorators';
+import { Controller, Get, Query } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiOkResponse } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
-import { AirportsListResponseDto } from './dto/airport-response.dto';
+import { AdminAirportsService } from './admin-airports.service';
+import { AirportsListResponseDto } from './dtos/airport-response.dto';
+import { AirportsQuery } from './dtos/airport-query';
+import { Protected, Roles } from 'src/common/decorators';
+import { ApiAdminAuthErrors, ApiBadRequestError } from 'src/common/swagger/api-responses.decorator';
 
 @ApiTags('Admin / Airports')
-@ApiBearerAuth()
+@ApiBearerAuth('bearerAuth')
 @Protected()
 @Roles(Role.ADMIN)
-@Controller({ path: 'admin-airports', version: '1' })
+@Controller({ path: 'admin/airports', version: '1' })
 export class AdminAirportsController {
   constructor(private readonly adminAirportsService: AdminAirportsService) {}
 
   @Get()
   @ApiOperation({
-    summary: 'Получить список всех аэропортов',
+    summary: 'Get list of all airports',
     description:
-      'Возвращает полный список всех зарегистрированных аэропортов в системе. ' +
-      'Доступно только для администраторов.',
+      'Returns the full list of all registered airports in the system. ' +
+      'Available to administrators only.',
   })
   @ApiOkResponse({
-    description: 'Список аэропортов успешно получен',
+    description: 'Airports list retrieved successfully',
     type: AirportsListResponseDto,
   })
-  @ApiUnauthorizedResponse({
-    description: 'Ошибка аутентификации - требуется валидный JWT токен',
-  })
-  @ApiForbiddenResponse({
-    description: 'Ошибка авторизации - требуется роль ADMIN',
-  })
-  async findAll() {
-    const airports = await this.adminAirportsService.findAll();
-    return { data: airports };
+  @ApiAdminAuthErrors()
+  @ApiBadRequestError()
+  async findAll(@Query() dto: AirportsQuery) {
+    return await this.adminAirportsService.findAll(dto);
   }
 }

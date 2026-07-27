@@ -1,233 +1,84 @@
-import { PrismaClient } from '@prisma/client';
-import 'dotenv/config';
-import { PrismaPg } from '@prisma/adapter-pg';
+import type { RouteSeedConfig } from './config/routes.config';
+import { ALL_ROUTES } from './config/routes.config';
+import { generateAllFlights } from './generators/flights.generator';
+import { createPrismaClient } from './lib/prisma-client';
+import { clearFlightOperationalData } from './lib/flight-instance-builder';
+import { runSeedMain } from './lib/run-if-main';
 
-const prisma = new PrismaClient({
-  adapter: new PrismaPg({
-    connectionString: process.env.DATABASE_URL,
-  }),
-});
+const prisma = createPrismaClient();
 
-export async function seedFlights() {
+export async function seedFlightsAndSegments(options?: {
+  clean?: boolean;
+  routes?: RouteSeedConfig[];
+}) {
+  if (options?.clean) {
+    console.log('🧹 Cleaning existing flights...');
+    await clearFlightOperationalData(prisma);
+  }
+
+  const routes = options?.routes ?? ALL_ROUTES;
   const airports = await prisma.airport.findMany();
   const airlines = await prisma.airline.findMany();
+  const aircraft = await prisma.aircraft.findMany();
 
-  const airportMap = Object.fromEntries(airports.map((airport) => [airport.iataCode, airport.id]));
+  const airportMap = Object.fromEntries(airports.map((item) => [item.iataCode, item.id]));
+  const airlineMap = Object.fromEntries(airlines.map((item) => [item.code, item.id]));
+  const aircraftMap = Object.fromEntries(aircraft.map((item) => [item.code, item.id]));
 
-  const airlineMap = Object.fromEntries(airlines.map((airline) => [airline.code, airline.id]));
+  const generated = generateAllFlights(routes);
+  let createdFlights = 0;
+  let createdSegments = 0;
 
-  await prisma.flight.createMany({
-    skipDuplicates: true,
-    data: [
-      {
-        airlineId: airlineMap.SU,
-        flightNumber: 'SU100',
-        departureAirportId: airportMap.SVO,
-        arrivalAirportId: airportMap.JFK,
-        durationMinutes: 600,
-      },
-      {
-        airlineId: airlineMap.SU,
-        flightNumber: 'SU2130',
-        departureAirportId: airportMap.SVO,
-        arrivalAirportId: airportMap.IST,
-        durationMinutes: 300,
-      },
-      {
-        airlineId: airlineMap.SU,
-        flightNumber: 'SU2142',
-        departureAirportId: airportMap.SVO,
-        arrivalAirportId: airportMap.AYT,
-        durationMinutes: 300,
-      },
-      {
-        airlineId: airlineMap.SU,
-        flightNumber: 'SU46',
-        departureAirportId: airportMap.SVO,
-        arrivalAirportId: airportMap.LED,
-        durationMinutes: 90,
-      },
-      {
-        airlineId: airlineMap.TK,
-        flightNumber: 'TK1',
-        departureAirportId: airportMap.IST,
-        arrivalAirportId: airportMap.JFK,
-        durationMinutes: 650,
-      },
-      {
-        airlineId: airlineMap.TK,
-        flightNumber: 'TK79',
-        departureAirportId: airportMap.IST,
-        arrivalAirportId: airportMap.SFO,
-        durationMinutes: 810,
-      },
-      {
-        airlineId: airlineMap.TK,
-        flightNumber: 'TK15',
-        departureAirportId: airportMap.IST,
-        arrivalAirportId: airportMap.LAX,
-        durationMinutes: 820,
-      },
-      {
-        airlineId: airlineMap.TK,
-        flightNumber: 'TK1661',
-        departureAirportId: airportMap.IST,
-        arrivalAirportId: airportMap.FRA,
-        durationMinutes: 190,
-      },
+  for (const flight of generated) {
+    const departureAirportId = airportMap[flight.from];
+    const arrivalAirportId = airportMap[flight.to];
+    const airlineId = airlineMap[flight.airlineCode];
+    const aircraftId = aircraftMap[flight.aircraftCode];
 
-      {
-        airlineId: airlineMap.LH,
-        flightNumber: 'LH400',
-        departureAirportId: airportMap.FRA,
-        arrivalAirportId: airportMap.JFK,
-        durationMinutes: 510,
-      },
-      {
-        airlineId: airlineMap.LH,
-        flightNumber: 'LH454',
-        departureAirportId: airportMap.FRA,
-        arrivalAirportId: airportMap.SFO,
-        durationMinutes: 700,
-      },
-      {
-        airlineId: airlineMap.LH,
-        flightNumber: 'LH452',
-        departureAirportId: airportMap.FRA,
-        arrivalAirportId: airportMap.LAX,
-        durationMinutes: 720,
-      },
-      {
-        airlineId: airlineMap.LH,
-        flightNumber: 'LH96',
-        departureAirportId: airportMap.FRA,
-        arrivalAirportId: airportMap.MUC,
-        durationMinutes: 55,
-      },
-      {
-        airlineId: airlineMap.AF,
-        flightNumber: 'AF6',
-        departureAirportId: airportMap.CDG,
-        arrivalAirportId: airportMap.JFK,
-        durationMinutes: 495,
-      },
-      {
-        airlineId: airlineMap.AF,
-        flightNumber: 'AF84',
-        departureAirportId: airportMap.CDG,
-        arrivalAirportId: airportMap.SFO,
-        durationMinutes: 690,
-      },
-      {
-        airlineId: airlineMap.BA,
-        flightNumber: 'BA117',
-        departureAirportId: airportMap.LHR,
-        arrivalAirportId: airportMap.JFK,
-        durationMinutes: 470,
-      },
-      {
-        airlineId: airlineMap.BA,
-        flightNumber: 'BA287',
-        departureAirportId: airportMap.LHR,
-        arrivalAirportId: airportMap.SFO,
-        durationMinutes: 660,
-      },
-      {
-        airlineId: airlineMap.KL,
-        flightNumber: 'KL641',
-        departureAirportId: airportMap.AMS,
-        arrivalAirportId: airportMap.JFK,
-        durationMinutes: 480,
-      },
-      {
-        airlineId: airlineMap.IB,
-        flightNumber: 'IB6253',
-        departureAirportId: airportMap.MAD,
-        arrivalAirportId: airportMap.JFK,
-        durationMinutes: 500,
-      },
-      {
-        airlineId: airlineMap.AZ,
-        flightNumber: 'AZ610',
-        departureAirportId: airportMap.FCO,
-        arrivalAirportId: airportMap.JFK,
-        durationMinutes: 570,
-      },
-      {
-        airlineId: airlineMap.EK,
-        flightNumber: 'EK205',
-        departureAirportId: airportMap.DXB,
-        arrivalAirportId: airportMap.JFK,
-        durationMinutes: 840,
-      },
-      {
-        airlineId: airlineMap.QR,
-        flightNumber: 'QR739',
-        departureAirportId: airportMap.DOH,
-        arrivalAirportId: airportMap.LAX,
-        durationMinutes: 960,
-      },
-      {
-        airlineId: airlineMap.DL,
-        flightNumber: 'DL284',
-        departureAirportId: airportMap.JFK,
-        arrivalAirportId: airportMap.SFO,
-        durationMinutes: 390,
-      },
-      {
-        airlineId: airlineMap.DL,
-        flightNumber: 'DL12',
-        departureAirportId: airportMap.JFK,
-        arrivalAirportId: airportMap.LAX,
-        durationMinutes: 375,
-      },
-      {
-        airlineId: airlineMap.AA,
-        flightNumber: 'AA177',
-        departureAirportId: airportMap.JFK,
-        arrivalAirportId: airportMap.SFO,
-        durationMinutes: 395,
-      },
-      {
-        airlineId: airlineMap.UA,
-        flightNumber: 'UA863',
-        departureAirportId: airportMap.SFO,
-        arrivalAirportId: airportMap.JFK,
-        durationMinutes: 330,
-      },
-      {
-        airlineId: airlineMap.UA,
-        flightNumber: 'UA154',
-        departureAirportId: airportMap.SFO,
-        arrivalAirportId: airportMap.LAX,
-        durationMinutes: 95,
-      },
-      {
-        airlineId: airlineMap.AS,
-        flightNumber: 'AS21',
-        departureAirportId: airportMap.SEA,
-        arrivalAirportId: airportMap.JFK,
-        durationMinutes: 320,
-      },
-      {
-        airlineId: airlineMap.AC,
-        flightNumber: 'AC851',
-        departureAirportId: airportMap.YYZ,
-        arrivalAirportId: airportMap.LHR,
-        durationMinutes: 425,
-      },
-    ],
-  });
+    if (!departureAirportId || !arrivalAirportId || !airlineId) {
+      console.warn(`Skip ${flight.flightNumber}: missing airport or airline`);
+      continue;
+    }
 
-  console.log('✅ Flights seeded');
+    if (!aircraftId) {
+      console.warn(`Skip ${flight.flightNumber}: aircraft ${flight.aircraftCode} not found`);
+      continue;
+    }
+
+    const created = await prisma.flight.create({
+      data: {
+        airlineId,
+        flightNumber: flight.flightNumber,
+        departureAirportId,
+        arrivalAirportId,
+        durationMinutes: flight.durationMinutes,
+        segments: {
+          create: {
+            segmentOrder: 1,
+            dayOffset: 0,
+            departureAirportId,
+            arrivalAirportId,
+            departureTime: flight.departureTime,
+            arrivalTime: flight.arrivalTime,
+            carrierCode: flight.airlineCode,
+            flightNumber: flight.flightNumber,
+            aircraftId,
+            durationMinutes: flight.durationMinutes,
+          },
+        },
+      },
+    });
+
+    createdFlights++;
+    createdSegments++;
+  }
+
+  console.log(`✅ Flights seeded (${createdFlights})`);
+  console.log(`✅ Flight segments seeded (${createdSegments})`);
 }
 
 async function main() {
-  await seedFlights();
+  await seedFlightsAndSegments({ clean: true });
 }
 
-main()
-  .catch(console.error)
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+runSeedMain(main, () => prisma.$disconnect(), 'flights.seed');

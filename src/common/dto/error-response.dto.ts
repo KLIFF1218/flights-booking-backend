@@ -27,4 +27,16 @@ export class ErrorResponseDto {
 
   @ApiPropertyOptional({ example: 'trace-abc-123', description: 'Trace ID for the request chain' })
   traceId?: string;
+
+  @ApiPropertyOptional({
+    example: 'QUOTE_EXPIRED',
+    description: 'Stable machine-readable code for client handling (e.g. pricing revalidation)',
+  })
+  errorCode?: string;
+
+  @ApiPropertyOptional({
+    example: 'QUOTE_EXPIRED',
+    description: 'Pricing/checkout reprice reason when price must be refreshed',
+  })
+  repriceReason?: string;
 }

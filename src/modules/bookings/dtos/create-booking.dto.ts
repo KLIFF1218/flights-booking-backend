@@ -23,7 +23,7 @@ export class CreateBookingDto {
   @IsNotEmpty()
   @ValidateNested()
   @Type(() => Object)
-  @ApiProperty({ description: 'Данные заказа, полученные от поставщика', example: {} })
+  @ApiProperty({ description: 'Order data received from the provider', example: {} })
   flightOrder!: FlightOrderData;
 
   @IsEnum(PaymentProvider)

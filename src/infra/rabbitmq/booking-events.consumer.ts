@@ -1,14 +1,18 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { RabbitSubscribe } from '@golevelup/nestjs-rabbitmq';
-import { TicketingService } from 'src/modules/ticketing/services/ticketing.service';
+import { TicketingEnqueueService } from 'src/modules/ticketing/services/ticketing-enqueue.service';
 import { Logger } from 'nestjs-pino';
+import { BookingFlowStage, logBookingFlowStage } from 'src/common/logging/booking-flow.logger';
+import { MetricsService } from '../metrics/metrics.service';
+import { runSafely } from 'src/common/utils/safe-metrics.util';
 import 'dotenv/config';
 
 @Injectable()
 export class BookingEventsConsumer implements OnModuleInit {
   constructor(
-    private readonly ticketingService: TicketingService,
+    private readonly ticketingEnqueue: TicketingEnqueueService,
     private readonly logger: Logger,
+    private readonly metrics: MetricsService,
   ) {}
 
   async onModuleInit() {
@@ -28,7 +32,15 @@ export class BookingEventsConsumer implements OnModuleInit {
     },
   })
   async onBookingPaid(message: { bookingId: string }) {
-    this.logger.log({ bookingId: message.bookingId }, 'RabbitMQ received booking.paid');
-    await this.ticketingService.issueTicket(message.bookingId);
+    logBookingFlowStage(this.logger, BookingFlowStage.RABBITMQ_RECEIVED, {
+      bookingId: message.bookingId,
+    });
+    try {
+      await this.ticketingEnqueue.enqueueIssueTicket(message.bookingId);
+      runSafely(() => this.metrics.recordRabbitConsume('booking.paid', 'success'));
+    } catch (error) {
+      runSafely(() => this.metrics.recordRabbitConsume('booking.paid', 'failure'));
+      throw error;
+    }
   }
 }

@@ -1,8 +1,14 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { Injectable } from '@nestjs/common';
-import { MailerService } from '@nestjs-modules/mailer';
 import { Logger } from 'nestjs-pino';
+import { ResendMailService } from './resend-mail.service';
+import { MetricsService } from '../metrics/metrics.service';
+import { runSafely } from 'src/common/utils/safe-metrics.util';
+import {
+  normalizeMailFailureReason,
+  normalizeMailType,
+} from '../metrics/normalize-metric-reason.util';
 
 type BookingMailJob = {
   email: string;
@@ -10,7 +16,7 @@ type BookingMailJob = {
   tickets?: {
     travelerId: string;
     ticketNumber: string;
-    downloadUrl: string;
+    pdfKey: string;
   }[];
 };
 
@@ -18,13 +24,17 @@ type BookingMailJob = {
 @Injectable()
 export class MailProcessor extends WorkerHost {
   constructor(
-    private readonly mailer: MailerService,
+    private readonly resendMail: ResendMailService,
     private readonly logger: Logger,
+    private readonly metrics: MetricsService,
   ) {
     super();
   }
 
   async process(job: Job<BookingMailJob>) {
+    const mailType = normalizeMailType(job.name);
+    const delaySeconds = (Date.now() - job.timestamp) / 1000;
+
     this.logger.log(
       {
         createdAt: new Date(job.timestamp).toISOString(),
@@ -39,48 +49,36 @@ export class MailProcessor extends WorkerHost {
     try {
       switch (job.name) {
         case 'send-booking-success': {
-          const attachments =
-            tickets?.map((ticket) => ({
-              filename: `Ticket-${ticket.ticketNumber}.pdf`,
-              href: ticket.downloadUrl,
-              contentType: 'application/pdf',
-            })) || [];
-
-          await this.mailer.sendMail({
-            to: email,
-            subject: 'Ваш электронный билет готов ✈️',
-            template: 'booking-success',
-            context: {
-              bookingId,
-              tickets: job.data.tickets,
-            },
-            attachments,
-          });
-
+          await this.resendMail.sendBookingSuccess(email, bookingId, tickets ?? []);
           break;
         }
 
         case 'send-booking-failed': {
-          await this.mailer.sendMail({
-            to: email,
-            subject: 'Ошибка оформления бронирования',
-            template: 'booking-failed',
-            context: { bookingId },
-          });
+          await this.resendMail.sendBookingFailed(email, bookingId);
           break;
         }
 
         default: {
           this.logger.warn({ jobName: job.name }, 'Unknown mail job');
-          break;
+          return;
         }
       }
 
+      runSafely(() => {
+        this.metrics.recordEmailSent(mailType, 'sent');
+        this.metrics.recordNotificationDelay(delaySeconds, mailType);
+      });
+
       this.logger.log({ jobId: job.id, bookingId }, 'Mail sent successfully');
-    } catch (error) {
+    } catch (error: unknown) {
+      runSafely(() => {
+        this.metrics.recordEmailFailed(mailType, normalizeMailFailureReason(error));
+        this.metrics.recordNotificationDelay(delaySeconds, mailType);
+      });
+
       this.logger.error(
         {
-          err: error,
+          err: error instanceof Error ? error : String(error),
           jobName: job.name,
           bookingId,
         },

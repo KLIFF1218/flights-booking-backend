@@ -1,4 +1,4 @@
-import type { Segment } from '../interfaces/flight-offer-pricing.interface';
+import type { BuiltSegment } from 'src/modules/bookings/types/segment.types';
 
 const DURATION_REGEX = /PT(?:(\d+)H)?(?:(\d+)M)?/;
 
@@ -14,7 +14,7 @@ export function parseDuration(duration?: string): number {
   return hours * 60 + minutes;
 }
 
-export function calculateDuration(segments: Segment[]) {
+export function calculateDuration(segments: BuiltSegment[]) {
   let total = 0;
 
   for (const s of segments) {
@@ -36,4 +36,14 @@ export function calculateDuration(segments: Segment[]) {
   }
 
   return total;
+}
+
+export function calculateDoorToDoorDurationMinutes(
+  departureAt: string | Date,
+  arrivalAt: string | Date,
+): number {
+  const departure = departureAt instanceof Date ? departureAt : new Date(departureAt);
+  const arrival = arrivalAt instanceof Date ? arrivalAt : new Date(arrivalAt);
+
+  return Math.floor((arrival.getTime() - departure.getTime()) / 60_000);
 }

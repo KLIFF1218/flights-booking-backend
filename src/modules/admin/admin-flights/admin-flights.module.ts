@@ -1,9 +1,12 @@
 import { Module } from '@nestjs/common';
-import { FlightsController } from './admin-flights.controller';
+import { AdminFlightsController } from './admin-flights.controller';
 import { FlightsService } from './admin-flights.service';
+import { FlightsModule } from 'src/modules/flights/flights.module';
+import { OutboxModule } from 'src/infra/outbox/outbox.module';
 
 @Module({
-  controllers: [FlightsController],
+  imports: [FlightsModule, OutboxModule],
+  controllers: [AdminFlightsController],
   providers: [FlightsService],
 })
 export class AdminFlightsModule {}

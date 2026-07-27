@@ -57,12 +57,33 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  async delByPrefix(prefix: string): Promise<number | null> {
-    const keys = await this.client.keys(`${prefix}*`);
-    if (keys.length > 0) {
-      return await this.client.del(...keys);
-    }
-    return null;
+  async setIfNotExists<T>(key: string, value: T, ttlSeconds: number): Promise<boolean> {
+    const serializedValue = JSON.stringify(value);
+    const result = await this.client.set(key, serializedValue, 'EX', ttlSeconds, 'NX');
+    return result === 'OK';
+  }
+
+  /** Atomically read and delete a JSON value (Redis GETDEL). */
+  async getDelete<T>(key: string): Promise<T | null> {
+    const data = await this.client.getdel(key);
+    return data ? (JSON.parse(data) as T) : null;
+  }
+
+  async delByPrefix(prefix: string): Promise<number> {
+    const pattern = `${prefix}*`;
+    let cursor = '0';
+    let deleted = 0;
+
+    do {
+      const [nextCursor, keys] = await this.client.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+      cursor = nextCursor;
+
+      if (keys.length > 0) {
+        deleted += await this.client.unlink(...keys);
+      }
+    } while (cursor !== '0');
+
+    return deleted;
   }
 
   async delete(key: string): Promise<number> {

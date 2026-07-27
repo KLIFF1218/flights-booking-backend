@@ -28,7 +28,7 @@ jobs:
           envs: IMAGE,GHCR_PULL_TOKEN
           script: |
             set -euo pipefail
-            cd /var/www/flights-app
+            cd /var/www/max-airline
             export GITHUB_REPOSITORY="${{ github.repository }}"
             export APP_VERSION=latest
 
@@ -40,10 +40,7 @@ jobs:
             echo "> Pulling ${IMAGE}..."
             docker pull "${IMAGE}"
 
-            echo "> Running Prisma migrations..."
-            docker compose -f docker-compose.production.yml run --rm app npx prisma migrate deploy
-
-            echo "> Restarting containers..."
+            echo "> Restarting containers (migrations run via app entrypoint)..."
             docker compose -f docker-compose.production.yml up -d --pull always --remove-orphans
 
             echo "> Cleaning up old images..."

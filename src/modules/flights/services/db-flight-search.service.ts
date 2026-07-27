@@ -1,25 +1,57 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import {
   FlightOffersResponse,
   FlightSearchParams,
-  PassengerCounts,
-  TravelClass,
   FlightOffer,
+  Itinerary,
 } from '../interfaces/flight-offers.interface';
-import type {
-  FlightInstanceWithRelations,
-  FlightSegmentWithRelations,
-} from 'src/modules/bookings/types/prisma.types';
-import { BuiltSegment } from 'src/modules/bookings/types/segment.types';
-import { PassengerType } from '@prisma/client';
+import { formatDuration } from '../utils/time.util';
+import { buildTimeline } from '../utils/timeline.util';
+import { FlightInstanceWithRelations } from '../providers/prisma/flight-instance.type';
+import { flightInstanceInclude } from '../providers/prisma/flight-instance.include';
+import { combineTravelerPricings } from '../utils/traveler-pricing.util';
+import { mergeLegOfferPrices } from '../utils/fare-charges.util';
+import { isCyclicRoute } from '../utils/route.util';
+import { Airport, FlightStatus } from '@prisma/client';
+import { buildOneWayOffers } from '../utils/offer-builder.util';
+import { buildConnectionLegs, mergeRoundTripLegs } from '../utils/offer-flight-instances.util';
+import { countSeatsRequired } from '../utils/passenger-counts.util';
+import { parseDuration } from '../utils/duration.util';
+import { assertValidRoundTripDirections } from '../utils/validate-search-directions.util';
+import { buildDepartureSearchWindow, matchesLocalDate } from '../utils/timezone-date.util';
+import { getMinTurnaroundMinutes, meetsMinimumTurnaround } from '../utils/turnaround.util';
+import { resolveDefaultSearchCurrency } from 'src/modules/payment/utils/payment-defaults.util';
 
 const MIN_CONNECTION_MINUTES = 45;
 const MAX_CONNECTION_MINUTES = 6 * 60;
+const ONE_WAY_MAX_CACHED_OFFERS = 500;
+const ROUND_TRIP_MAX_CACHED_OFFERS = 500;
+const ROUND_TRIP_MAX_PER_LEG_OFFERS = 50;
+
+function resolveMaxCachedOffers(limit: number, maxCachedOffers: number): number {
+  return Math.min(Math.max(limit * 25, limit), maxCachedOffers);
+}
 
 @Injectable()
 export class DbFlightsSearchProvider {
+  private static readonly airportCache = new Map<string, Airport>();
+
   constructor(private readonly prisma: PrismaService) {}
+
+  private async getCachedAirport(code: string): Promise<Airport | null> {
+    const cached = DbFlightsSearchProvider.airportCache.get(code);
+    if (cached) return cached;
+
+    const airport = await this.prisma.airport.findUnique({
+      where: { iataCode: code },
+    });
+
+    if (airport) {
+      DbFlightsSearchProvider.airportCache.set(code, airport);
+    }
+    return airport;
+  }
 
   async searchFlights(params: FlightSearchParams): Promise<FlightOffersResponse> {
     if (params.directions.length === 1) {
@@ -27,24 +59,43 @@ export class DbFlightsSearchProvider {
     } else if (params.directions.length === 2) {
       return this.searchRoundTripFlights(params);
     } else {
-      throw new Error('Only one-way and round-trip searches are supported');
+      throw new BadRequestException('Only one-way and round-trip searches are supported');
     }
   }
 
   private async searchOneWayFlights(params: FlightSearchParams): Promise<FlightOffersResponse> {
     const direction = params.directions[0];
+    const seatsRequired = countSeatsRequired(params.passengers);
 
-    const start = new Date(direction.dateFrom);
-    const end = new Date(start);
-    end.setDate(end.getDate() + 1);
+    const targetCurrency = params.currencyCode ?? resolveDefaultSearchCurrency();
+    const limit = params.limit ?? 20;
+    const maxCachedOffers = resolveMaxCachedOffers(limit, ONE_WAY_MAX_CACHED_OFFERS);
 
-    const take = Math.min((params.limit ?? 20) * 10, 1000);
+    const [depAirport, arrAirport] = await Promise.all([
+      this.getCachedAirport(direction.origin),
+      this.getCachedAirport(direction.destination),
+    ]);
 
-    const instances = await this.prisma.flightInstance.findMany({
+    if (!depAirport || !arrAirport) {
+      return { data: [], meta: { count: 0 } };
+    }
+
+    const departureTimeZone = depAirport.timezone || 'UTC';
+    const { dbStart, dbEnd } = buildDepartureSearchWindow(direction.dateFrom, departureTimeZone);
+    const { dbEnd: secondLegDbEnd } = buildDepartureSearchWindow(
+      direction.dateFrom,
+      departureTimeZone,
+      1,
+    );
+
+    const directInstances = await this.prisma.flightInstance.findMany({
       where: {
         departureDate: {
-          gte: start,
-          lt: end,
+          gte: dbStart,
+          lt: dbEnd,
+        },
+        status: {
+          in: [FlightStatus.SCHEDULED, FlightStatus.DELAYED],
         },
         flight: {
           departureAirport: {
@@ -54,425 +105,330 @@ export class DbFlightsSearchProvider {
             iataCode: direction.destination,
           },
         },
-      },
-      orderBy: {
-        departureDate: 'asc',
-      },
-      take,
-      include: {
-        fares: true,
-        flight: {
-          include: {
-            airline: true,
-            segments: {
-              orderBy: {
-                segmentOrder: 'asc',
-              },
-              include: {
-                departureAirport: true,
-                arrivalAirport: true,
-                aircraft: true,
-              },
-            },
-          },
+        seatsAvailable: {
+          gte: seatsRequired,
         },
       },
+      include: flightInstanceInclude,
     });
 
-    const directOffers = this.buildDirectFlights(instances, direction, params);
+    const matchedDirects = directInstances.filter((instance) => {
+      const timeZone = instance.flight.departureAirport.timezone || 'UTC';
+      return matchesLocalDate(new Date(instance.departureDate), timeZone, direction.dateFrom);
+    });
 
-    const connectionOffers = this.buildConnections(instances, direction, params);
+    const offerCache = new Map<string, FlightOffer>();
 
-    const data = [...directOffers, ...connectionOffers];
+    const directOffers = buildOneWayOffers(
+      matchedDirects,
+      params.passengers,
+      params.travelClass,
+      targetCurrency,
+      offerCache,
+    );
+
+    const firstLegCandidates = await this.prisma.flightInstance.findMany({
+      where: {
+        departureDate: {
+          gte: dbStart,
+          lt: dbEnd,
+        },
+        status: {
+          in: [FlightStatus.SCHEDULED, FlightStatus.DELAYED],
+        },
+        flight: {
+          departureAirport: {
+            iataCode: direction.origin,
+          },
+        },
+        seatsAvailable: {
+          gte: seatsRequired,
+        },
+      },
+      include: flightInstanceInclude,
+    });
+
+    const secondLegCandidates = await this.prisma.flightInstance.findMany({
+      where: {
+        departureDate: {
+          gte: dbStart,
+          lt: secondLegDbEnd,
+        },
+        status: {
+          in: [FlightStatus.SCHEDULED, FlightStatus.DELAYED],
+        },
+        flight: {
+          arrivalAirport: {
+            iataCode: direction.destination,
+          },
+        },
+        seatsAvailable: {
+          gte: seatsRequired,
+        },
+      },
+      include: flightInstanceInclude,
+    });
+
+    const secondLegsByDepAirport = new Map<string, FlightInstanceWithRelations[]>();
+    for (const second of secondLegCandidates) {
+      const depCode = second.flight.departureAirport.iataCode;
+      let list = secondLegsByDepAirport.get(depCode);
+      if (!list) {
+        list = [];
+        secondLegsByDepAirport.set(depCode, list);
+      }
+      list.push(second);
+    }
+
+    const connectionOffers: FlightOffer[] = [];
+
+    for (const first of firstLegCandidates) {
+      const timeZone = first.flight.departureAirport.timezone || 'UTC';
+      if (!matchesLocalDate(new Date(first.departureDate), timeZone, direction.dateFrom)) {
+        continue;
+      }
+
+      const firstTimeline = buildTimeline(first);
+      if (firstTimeline.length === 0) continue;
+      const firstArrival = firstTimeline[firstTimeline.length - 1].arrivalAt;
+
+      const potentialSeconds =
+        secondLegsByDepAirport.get(first.flight.arrivalAirport.iataCode) || [];
+
+      for (const second of potentialSeconds) {
+        const secondDeparture = new Date(second.departureDate);
+        const layoverMinutes = (secondDeparture.getTime() - firstArrival.getTime()) / 60000;
+
+        if (layoverMinutes >= MIN_CONNECTION_MINUTES && layoverMinutes <= MAX_CONNECTION_MINUTES) {
+          const airportRoute = [
+            first.flight.departureAirport.iataCode,
+            first.flight.arrivalAirport.iataCode,
+            second.flight.arrivalAirport.iataCode,
+          ];
+          if (isCyclicRoute(airportRoute)) {
+            continue;
+          }
+
+          let firstOffer = offerCache.get(first.id);
+          if (!firstOffer) {
+            const built = buildOneWayOffers(
+              [first],
+              params.passengers,
+              params.travelClass,
+              targetCurrency,
+              offerCache,
+            )[0];
+            if (built) {
+              firstOffer = built;
+              offerCache.set(first.id, firstOffer);
+            }
+          }
+
+          let secondOffer = offerCache.get(second.id);
+          if (!secondOffer) {
+            const built = buildOneWayOffers(
+              [second],
+              params.passengers,
+              params.travelClass,
+              targetCurrency,
+              offerCache,
+            )[0];
+            if (built) {
+              secondOffer = built;
+              offerCache.set(second.id, secondOffer);
+            }
+          }
+
+          if (!firstOffer || !secondOffer) continue;
+
+          const secondTimeline = buildTimeline(second);
+          if (secondTimeline.length === 0) continue;
+          const secondArrival = secondTimeline[secondTimeline.length - 1].arrivalAt;
+
+          const combinedPrice = mergeLegOfferPrices(
+            firstOffer.price,
+            secondOffer.price,
+            seatsRequired,
+          );
+
+          const itinerary: Itinerary = {
+            duration: formatDuration(
+              Math.floor(
+                (secondArrival.getTime() - new Date(first.departureDate).getTime()) / 60000,
+              ),
+            ),
+            segments: [
+              ...firstOffer.itineraries[0].segments,
+              ...secondOffer.itineraries[0].segments,
+            ],
+          };
+
+          connectionOffers.push({
+            id: `${first.id}_${second.id}`,
+            source: firstOffer.source,
+            fareBrand: firstOffer.fareBrand,
+            changeable: firstOffer.changeable,
+            refundable: firstOffer.refundable,
+            currencyCode: targetCurrency,
+            legs: buildConnectionLegs(first.id, second.id),
+            numberOfBookableSeats: Math.min(first.seatsAvailable, second.seatsAvailable),
+            itineraries: [itinerary],
+            price: combinedPrice,
+            travelerPricings: combineTravelerPricings(
+              firstOffer.travelerPricings || [],
+              secondOffer.travelerPricings || [],
+            ),
+          });
+        }
+      }
+    }
+
+    const allOffers = [...directOffers, ...connectionOffers];
+    const cappedOffers = this.selectTopLegOffers(allOffers, maxCachedOffers);
 
     return {
+      data: cappedOffers,
       meta: {
-        count: data.length,
+        count: cappedOffers.length,
       },
-      data,
     };
   }
 
   private async searchRoundTripFlights(params: FlightSearchParams): Promise<FlightOffersResponse> {
-    if (params.directions.length !== 2) {
-      throw new Error('Round trip requires 2 directions');
+    const limit = params.limit ?? 20;
+    const targetCurrency = params.currencyCode ?? resolveDefaultSearchCurrency();
+
+    assertValidRoundTripDirections(params.directions[0], params.directions[1]);
+
+    const [outboundOriginAirport, outboundDestinationAirport] = await Promise.all([
+      this.getCachedAirport(params.directions[0].origin),
+      this.getCachedAirport(params.directions[0].destination),
+    ]);
+
+    if (!outboundOriginAirport || !outboundDestinationAirport) {
+      return { data: [], meta: { count: 0 } };
     }
 
-    const limit = params.limit ?? 20;
-    const [outboundDirection, returnDirection] = params.directions;
+    const minTurnaroundMinutes = getMinTurnaroundMinutes(
+      outboundOriginAirport.country,
+      outboundDestinationAirport.country,
+    );
 
-    const outboundOffers = await this.searchOneWayFlights({
-      ...params,
-      directions: [outboundDirection],
-      limit: limit * 5,
-    });
+    const globalCap = resolveMaxCachedOffers(limit, ROUND_TRIP_MAX_CACHED_OFFERS);
+    const perLegCap = Math.min(
+      ROUND_TRIP_MAX_PER_LEG_OFFERS,
+      Math.max(limit, Math.ceil(Math.sqrt(globalCap * 2))),
+    );
 
-    const returnOffers = await this.searchOneWayFlights({
-      ...params,
-      directions: [returnDirection],
-      limit: limit * 5,
-    });
+    const outboundParams: FlightSearchParams = { ...params, directions: [params.directions[0]] };
+    const returnParams: FlightSearchParams = { ...params, directions: [params.directions[1]] };
+
+    const [outboundOffers, returnOffers] = await Promise.all([
+      this.searchOneWayFlights(outboundParams),
+      this.searchOneWayFlights(returnParams),
+    ]);
+
+    const outboundCandidates = this.selectTopLegOffers(outboundOffers.data, perLegCap);
+    const returnCandidates = this.selectTopLegOffers(returnOffers.data, perLegCap);
+    const seatsRequired = countSeatsRequired(params.passengers);
 
     const combinedOffers: FlightOffer[] = [];
 
-    for (const outbound of outboundOffers.data) {
-      for (const returnFlight of returnOffers.data) {
-        const combinedId = `${outbound.id}_${returnFlight.id}`;
-        const totalPrice = parseFloat(outbound.price.total) + parseFloat(returnFlight.price.total);
-        const minSeats = Math.min(
-          outbound.numberOfBookableSeats,
-          returnFlight.numberOfBookableSeats,
-        );
+    for (const outbound of outboundCandidates) {
+      const outboundArrivalDate = this.getOfferArrivalDate(outbound);
+      if (!outboundArrivalDate) {
+        continue;
+      }
 
-        combinedOffers.push({
-          ...outbound,
-          id: combinedId,
-          oneWay: false,
-          numberOfBookableSeats: minSeats,
-          itineraries: [outbound.itineraries[0], returnFlight.itineraries[0]],
-          price: {
-            ...outbound.price,
-            total: totalPrice.toFixed(2),
-            base: totalPrice.toFixed(2),
-            grandTotal: totalPrice.toFixed(2),
-          },
-        });
+      for (const returnFlight of returnCandidates) {
+        const returnDepartureDate = this.getOfferDepartureDate(returnFlight);
+        if (!returnDepartureDate) {
+          continue;
+        }
+
+        if (
+          !meetsMinimumTurnaround(outboundArrivalDate, returnDepartureDate, minTurnaroundMinutes)
+        ) {
+          continue;
+        }
+
+        combinedOffers.push(
+          this.buildRoundTripOffer(outbound, returnFlight, targetCurrency, seatsRequired),
+        );
       }
     }
 
-    combinedOffers.sort((a, b) => Number(a.price.total) - Number(b.price.total));
+    combinedOffers.sort((a, b) => this.compareOffersByPriceAndDuration(a, b));
+    const cappedOffers = combinedOffers.slice(0, globalCap);
 
     return {
+      data: cappedOffers,
       meta: {
-        count: combinedOffers.length,
+        count: cappedOffers.length,
       },
-      data: combinedOffers.slice(0, limit),
     };
   }
 
-  private buildDirectFlights(
-    instances: FlightInstanceWithRelations[],
-    direction: FlightSearchParams['directions'][0],
-    params: FlightSearchParams,
-  ) {
-    const results: FlightOffersResponse['data'] = [];
-
-    for (const instance of instances) {
-      const segments = instance.flight.segments;
-      if (!segments.length) continue;
-
-      const first = segments[0];
-      const last = segments[segments.length - 1];
-
-      if (
-        first.departureAirport.iataCode !== direction.origin ||
-        last.arrivalAirport.iataCode !== direction.destination
-      ) {
-        continue;
-      }
-
-      const builtSegments = this.buildSegments(segments, instance);
-      const stops = builtSegments.length - 1;
-
-      results.push(this.buildOffer(instance, builtSegments, stops, params));
-    }
-
-    return results;
-  }
-
-  private buildConnections(
-    instances: FlightInstanceWithRelations[],
-    direction: FlightSearchParams['directions'][0],
-    params: FlightSearchParams,
-  ) {
-    const results: FlightOffersResponse['data'] = [];
-
-    const byDepartureAirport = new Map<string, FlightInstanceWithRelations[]>();
-
-    for (const instance of instances) {
-      const firstSeg = instance.flight.segments[0];
-
-      if (!firstSeg?.departureAirport?.iataCode) {
-        continue;
-      }
-
-      const airport = firstSeg.departureAirport.iataCode;
-
-      if (!byDepartureAirport.has(airport)) {
-        byDepartureAirport.set(airport, []);
-      }
-
-      byDepartureAirport.get(airport)!.push(instance);
-    }
-
-    const flightsFromOrigin = byDepartureAirport.get(direction.origin) || [];
-
-    for (const first of flightsFromOrigin) {
-      const firstSegments = first.flight.segments;
-      const firstLastSeg = firstSegments[firstSegments.length - 1];
-      const connectionAirport = firstLastSeg.arrivalAirport.iataCode;
-
-      if (!connectionAirport) {
-        continue;
-      }
-
-      const secondFlights = byDepartureAirport.get(connectionAirport) || [];
-      const firstBuiltSegments = this.buildSegments(first.flight.segments, first);
-      const firstArrival = new Date(firstBuiltSegments[firstBuiltSegments.length - 1].arrival.at);
-
-      for (const second of secondFlights) {
-        const secondDeparture = new Date(second.departureDate);
-        const diff = (secondDeparture.getTime() - firstArrival.getTime()) / 60000;
-
-        if (diff < MIN_CONNECTION_MINUTES || diff > MAX_CONNECTION_MINUTES) {
-          continue;
-        }
-
-        const secondLastSeg = second.flight.segments[second.flight.segments.length - 1];
-
-        if (secondLastSeg.arrivalAirport.iataCode !== direction.destination) {
-          continue;
-        }
-
-        const segments = [
-          ...firstBuiltSegments,
-          ...this.buildSegments(second.flight.segments, second),
-        ];
-
-        const firstPricing = this.calculateTotalPrice(first, params.passengers, params.travelClass);
-        const secondPricing = this.calculateTotalPrice(
-          second,
-          params.passengers,
-          params.travelClass,
-        );
-
-        const totalPrice = firstPricing.total + secondPricing.total;
-        const stops = segments.length - 1;
-
-        const offer = this.buildOffer(first, segments, stops, params);
-        offer.id = `${first.id}_${second.id}`;
-        offer.price.total = totalPrice.toFixed(2);
-        offer.price.base = totalPrice.toFixed(2);
-        offer.price.grandTotal = totalPrice.toFixed(2);
-
-        results.push(offer);
-      }
-    }
-
-    return results;
-  }
-
-  private buildOffer(
-    instance: FlightInstanceWithRelations,
-    segments: BuiltSegment[],
-    stops: number,
-    params: FlightSearchParams,
-    isOneWay: boolean = true,
-  ) {
-    const itineraryDuration = this.calculateItineraryDuration(segments);
-
-    const lastTicketingDate = new Date(instance.departureDate);
-    lastTicketingDate.setDate(lastTicketingDate.getDate() - 1);
-
-    const pricing = this.calculateTotalPrice(instance, params.passengers, params.travelClass);
+  private buildRoundTripOffer(
+    outbound: FlightOffer,
+    returnFlight: FlightOffer,
+    targetCurrency: typeof outbound.price.currency,
+    seatsRequired: number,
+  ): FlightOffer {
+    const combinedPrice = mergeLegOfferPrices(outbound.price, returnFlight.price, seatsRequired);
 
     return {
-      type: 'flight-offer',
-      id: instance.id,
-      source: 'GDS',
-      instantTicketingRequired: false,
-      nonHomogeneous: false,
-      oneWay: isOneWay,
-      lastTicketingDate: lastTicketingDate.toISOString().split('T')[0],
-      numberOfBookableSeats: instance.seatsAvailable,
-      itineraries: [
-        {
-          duration: itineraryDuration,
-          segments: segments.map((s) => ({
-            ...s,
-            numberOfStops: stops,
-          })),
-        },
-      ],
-      price: {
-        currency: pricing.currency,
-        total: pricing.total.toFixed(2),
-        base: pricing.total.toFixed(2),
-        grandTotal: pricing.total.toFixed(2),
-        fees: [],
-      },
-      travelerPricings: this.buildTravelerPricings(
-        params.passengers,
-        segments,
-        instance,
-        params.travelClass,
+      id: `${outbound.id}_${returnFlight.id}`,
+      source: outbound.source,
+      fareBrand: outbound.fareBrand,
+      changeable: outbound.changeable && returnFlight.changeable,
+      refundable: outbound.refundable && returnFlight.refundable,
+      currencyCode: targetCurrency,
+      legs: mergeRoundTripLegs(outbound, returnFlight),
+      numberOfBookableSeats: Math.min(
+        outbound.numberOfBookableSeats,
+        returnFlight.numberOfBookableSeats,
+      ),
+      itineraries: [...outbound.itineraries, ...returnFlight.itineraries],
+      price: combinedPrice,
+      travelerPricings: combineTravelerPricings(
+        outbound.travelerPricings || [],
+        returnFlight.travelerPricings || [],
       ),
     };
   }
 
-  private buildSegments(
-    segments: FlightSegmentWithRelations[],
-    instance: FlightInstanceWithRelations,
-  ): BuiltSegment[] {
-    const builtSegments: BuiltSegment[] = [];
-    let departureAt = new Date(instance.departureDate);
-
-    for (const segment of segments) {
-      const arrivalAt = new Date(departureAt.getTime() + segment.durationMinutes * 60000);
-
-      builtSegments.push({
-        id: segment.id,
-        flightInstanceId: instance.id,
-
-        departure: {
-          iataCode: segment.departureAirport.iataCode,
-          at: departureAt.toISOString(),
-        },
-
-        arrival: {
-          iataCode: segment.arrivalAirport.iataCode,
-          at: arrivalAt.toISOString(),
-        },
-
-        carrierCode: segment.carrierCode,
-        number: segment.flightNumber,
-
-        aircraft: {
-          code: segment.aircraft?.code ?? null,
-        },
-
-        operating: {
-          carrierCode: segment.carrierCode,
-        },
-
-        duration: this.formatDuration(segment.durationMinutes),
-
-        blacklistedInEU: false,
-      });
-
-      departureAt = arrivalAt;
+  private selectTopLegOffers(offers: FlightOffer[], maxCount: number): FlightOffer[] {
+    if (offers.length <= maxCount) {
+      return offers;
     }
 
-    return builtSegments;
+    return [...offers]
+      .sort((a, b) => this.compareOffersByPriceAndDuration(a, b))
+      .slice(0, maxCount);
   }
 
-  private calculateItineraryDuration(segments: BuiltSegment[]) {
-    const first = new Date(segments[0].departure.at).getTime();
-    const last = new Date(segments[segments.length - 1].arrival.at).getTime();
-
-    const minutes = Math.floor((last - first) / 60000);
-
-    return this.formatDuration(minutes);
-  }
-
-  private formatDuration(minutes: number) {
-    const h = Math.floor(minutes / 60);
-    const m = minutes % 60;
-
-    if (m === 0) return `PT${h}H`;
-
-    return `PT${h}H${m}M`;
-  }
-
-  private buildTravelerPricings(
-    passengers: PassengerCounts,
-    segments: BuiltSegment[],
-    instance: FlightInstanceWithRelations,
-    travelClass: TravelClass,
-  ) {
-    const travelers: FlightOffersResponse['data'][number]['travelerPricings'] = [];
-
-    const classMap = {
-      ECONOMY: 'Y',
-      PREMIUM_ECONOMY: 'W',
-      BUSINESS: 'J',
-      FIRST: 'F',
-    };
-
-    const bookingClass = classMap[travelClass];
-
-    let travelerId = 1;
-
-    const buildFareSegments = (checkedBags: number, fareBasis?: string) =>
-      segments.map((s) => ({
-        segmentId: s.id,
-        cabin: travelClass,
-        class: bookingClass,
-        fareBasis: fareBasis ?? `${bookingClass}MOCK`,
-        includedCheckedBags: {
-          quantity: checkedBags,
-        },
-      }));
-
-    const createTravelers = (count: number, type: PassengerType) => {
-      const fare = this.getFare(instance, type, travelClass);
-
-      if (!fare) {
-        return;
-      }
-
-      for (let i = 0; i < count; i++) {
-        travelers.push({
-          travelerId: String(travelerId++),
-          fareOption: 'STANDARD',
-          travelerType: type,
-          price: {
-            currency: fare.currency,
-            total: Number(fare.basePrice).toFixed(2),
-            base: Number(fare.basePrice).toFixed(2),
-          },
-          fareDetailsBySegment: buildFareSegments(fare.checkedBags, fare.fareBasis ?? undefined),
-        });
-      }
-    };
-
-    createTravelers(passengers.adults ?? 0, 'ADULT');
-    createTravelers(passengers.children ?? 0, 'CHILD');
-    createTravelers(passengers.infants ?? 0, 'HELD_INFANT');
-
-    return travelers;
-  }
-
-  private getFare(
-    instance: FlightInstanceWithRelations,
-    passengerType: PassengerType,
-    travelClass: TravelClass,
-  ) {
-    return instance.fares.find(
-      (fare) => fare.passengerType === passengerType && fare.travelClass === travelClass,
-    );
-  }
-
-  private calculateTotalPrice(
-    instance: FlightInstanceWithRelations,
-    passengers: PassengerCounts,
-    travelClass: TravelClass,
-  ) {
-    const adultFare = this.getFare(instance, 'ADULT', travelClass);
-    const childFare = this.getFare(instance, 'CHILD', travelClass);
-    const infantFare = this.getFare(instance, 'HELD_INFANT', travelClass);
-
-    let total = 0;
-    let currency = 'USD';
-
-    if (adultFare) {
-      total += Number(adultFare.basePrice) * (passengers.adults ?? 0);
-      currency = adultFare.currency;
+  private compareOffersByPriceAndDuration(a: FlightOffer, b: FlightOffer): number {
+    const priceDiff = Number(a.price.total) - Number(b.price.total);
+    if (priceDiff !== 0) {
+      return priceDiff;
     }
 
-    if (childFare) {
-      total += Number(childFare.basePrice) * (passengers.children ?? 0);
-      currency = childFare.currency;
-    }
+    return this.getOfferTotalDurationMinutes(a) - this.getOfferTotalDurationMinutes(b);
+  }
 
-    if (infantFare) {
-      total += Number(infantFare.basePrice) * (passengers.infants ?? 0);
-      currency = infantFare.currency;
-    }
+  private getOfferTotalDurationMinutes(offer: FlightOffer): number {
+    return offer.itineraries.reduce((sum, itinerary) => sum + parseDuration(itinerary.duration), 0);
+  }
 
-    return {
-      total,
-      currency,
-    };
+  private getOfferArrivalDate(offer: FlightOffer): Date | null {
+    const lastItinerary = offer.itineraries[offer.itineraries.length - 1];
+    const lastSegment = lastItinerary?.segments[lastItinerary.segments.length - 1];
+    return lastSegment ? new Date(lastSegment.arrival.at) : null;
+  }
+
+  private getOfferDepartureDate(offer: FlightOffer): Date | null {
+    const firstSegment = offer.itineraries[0]?.segments[0];
+    return firstSegment ? new Date(firstSegment.departure.at) : null;
   }
 }

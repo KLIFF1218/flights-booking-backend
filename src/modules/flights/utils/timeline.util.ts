@@ -1,38 +1,73 @@
 import type { FlightInstanceWithRelations } from 'src/modules/bookings/types/prisma.types';
 import type { SegmentTimeline } from '../interfaces/segment-timeline.interface';
+import { resolveAirportTimezone } from './airport-timezone.util';
+import { addDaysToIsoDate, formatDateInTimeZone, zonedTimeToUtc } from './timezone-date.util';
 import { timeStringOf } from './time.util';
+
+type SegmentWithDepartureAirport = {
+  dayOffset: number;
+  departureTime: string;
+  durationMinutes: number;
+  departureAirport: {
+    iataCode: string;
+    timezone?: string | null;
+  };
+};
+
+function resolveSegmentTimezone(segment: SegmentWithDepartureAirport): string {
+  return (
+    segment.departureAirport.timezone || resolveAirportTimezone(segment.departureAirport.iataCode)
+  );
+}
+
+export function buildSegmentDepartureAt(
+  instanceDepartureDate: Date,
+  dayOffset: number,
+  departureTime: string,
+  airportTimezone: string,
+): Date {
+  const [hours, minutes] = timeStringOf(departureTime).split(':').map(Number);
+  const anchorLocalDate = formatDateInTimeZone(instanceDepartureDate, airportTimezone);
+  const localDate = addDaysToIsoDate(anchorLocalDate, dayOffset);
+
+  return zonedTimeToUtc(localDate, airportTimezone, { hour: hours, minute: minutes });
+}
 
 export function buildTimeline(instance: FlightInstanceWithRelations): SegmentTimeline[] {
   const segments = instance.flight.segments;
-  const timeline: SegmentTimeline[] = [];
-  if (segments.length === 0) return timeline;
+  if (segments.length === 0) {
+    return [];
+  }
 
-  let currentDeparture = new Date(instance.departureDate);
+  if (segments.length === 1) {
+    const seg = segments[0];
+    const departureAt = new Date(instance.departureDate);
+    const arrivalAt = new Date(departureAt.getTime() + seg.durationMinutes * 60_000);
+
+    return [{ departureAt, arrivalAt, layoverMinutes: 0 }];
+  }
+
+  const timeline: SegmentTimeline[] = [];
+  const baseDepartureDate = new Date(instance.departureDate);
 
   for (let i = 0; i < segments.length; i++) {
     const seg = segments[i];
-    if (i > 0) {
-      const prevSeg = segments[i - 1];
-      const [prevH, prevM] = timeStringOf(prevSeg.arrivalTime).split(':').map(Number);
-      const [currH, currM] = timeStringOf(seg.departureTime).split(':').map(Number);
+    const airportTimezone = resolveSegmentTimezone(seg);
+    const departureAt = buildSegmentDepartureAt(
+      baseDepartureDate,
+      seg.dayOffset,
+      seg.departureTime,
+      airportTimezone,
+    );
+    const arrivalAt = new Date(departureAt.getTime() + seg.durationMinutes * 60_000);
 
-      let layover = currH * 60 + currM - (prevH * 60 + prevM);
-      if (layover < 0) {
-        layover += 24 * 60;
-      }
-      currentDeparture = new Date(
-        currentDeparture.getTime() + prevSeg.durationMinutes * 60000 + layover * 60000,
-      );
-    }
-
-    const arrivalAt = new Date(currentDeparture.getTime() + seg.durationMinutes * 60000);
-    const prevSegmentTimeline = timeline[i - 1];
-    const layoverMinutes = prevSegmentTimeline
-      ? Math.floor((currentDeparture.getTime() - prevSegmentTimeline.arrivalAt.getTime()) / 60000)
+    const previousSegment = timeline[i - 1];
+    const layoverMinutes = previousSegment
+      ? Math.floor((departureAt.getTime() - previousSegment.arrivalAt.getTime()) / 60_000)
       : 0;
 
     timeline.push({
-      departureAt: new Date(currentDeparture),
+      departureAt,
       arrivalAt,
       layoverMinutes,
     });

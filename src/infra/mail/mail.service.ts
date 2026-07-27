@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import { Logger } from 'nestjs-pino';
 import { MetricsService } from '../metrics/metrics.service';
+import { runSafely } from 'src/common/utils/safe-metrics.util';
 
 @Injectable()
 export class MailService {
@@ -18,7 +19,7 @@ export class MailService {
     tickets: {
       travelerId: string;
       ticketNumber: string;
-      downloadUrl: string;
+      pdfKey: string;
     }[],
   ) {
     await this.queue.add(
@@ -38,11 +39,7 @@ export class MailService {
         },
       },
     );
-    try {
-      this.metrics.recordEmailSent('booking_success', 'queued');
-    } catch {
-      this.logger.warn(error, 'Failed to record metrics');
-    }
+    runSafely(() => this.metrics.recordEmailEnqueued('booking_success'));
   }
 
   async sendBookingFailed(user: { email: string }, bookingId: string) {
@@ -64,10 +61,6 @@ export class MailService {
     );
 
     this.logger.log({ bookingId }, 'Booking failed email enqueued');
-    try {
-      this.metrics.recordEmailFailed('booking_failed', 'enqueued');
-    } catch {
-      this.logger.warn(error, 'Failed to record metrics');
-    }
+    runSafely(() => this.metrics.recordEmailEnqueued('booking_failed'));
   }
 }

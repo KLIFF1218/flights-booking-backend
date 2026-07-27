@@ -1,12 +1,58 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { AssignSeatDto } from '../dtos/add-seats.dto';
-import { BookingStatus } from '@prisma/client';
+import { BookingStatus, Prisma } from '@prisma/client';
+import { BookingSnapshot } from '../interfaces/booking-snapshot.interface';
+import { BuiltSegment } from '../types/segment.types';
+import { BookingsCacheService } from './bookings-cache.service';
+import {
+  assertBookingStatusAllows,
+  BookingOperation,
+  getAllowedStatusesForOperation,
+} from '../utils/booking-status.guard';
+import { BookingExpirationService } from './booking-expiration.service';
+import { SeatReleaseService } from './seat-release.service';
+import { resolveSeatHoldExpiresAt } from '../utils/seat-hold.util';
+import {
+  assertSeatSelectionComplete,
+  seatAssignmentsMatchRequest,
+} from '../utils/booking-seat-selection.util';
+import { assertBookingHasStatus, updateBookingIfStatus } from '../utils/booking-state.util';
+import { BookingMetricsService } from '../metrics/booking-metrics.service';
+import { resolveBookingMetricReason } from '../metrics/booking-metrics.util';
+
+type ResolvedSeatRequest = AssignSeatDto & {
+  flightInstanceId: string;
+};
 
 @Injectable()
 export class BookingSeatService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly bookingsCache: BookingsCacheService,
+    private readonly bookingExpirationService: BookingExpirationService,
+    private readonly seatReleaseService: SeatReleaseService,
+    private readonly bookingMetrics: BookingMetricsService,
+  ) {}
+
   async assignSeats(bookingId: string, userId: string, seats: AssignSeatDto[]) {
+    const startedAt = Date.now();
+
+    try {
+      return await this.assignSeatsInternal(bookingId, userId, seats, startedAt);
+    } catch (error) {
+      this.bookingMetrics.recordSeatAssignmentFailed(resolveBookingMetricReason(error));
+      this.bookingMetrics.recordOperationFailed('assign_seats', resolveBookingMetricReason(error));
+      throw error;
+    }
+  }
+
+  private async assignSeatsInternal(
+    bookingId: string,
+    userId: string,
+    seats: AssignSeatDto[],
+    startedAt: number,
+  ) {
     const booking = await this.prisma.booking.findFirst({
       where: {
         id: bookingId,
@@ -14,13 +60,9 @@ export class BookingSeatService {
       },
       include: {
         travelers: true,
-        flightInstance: {
+        seatAssignments: {
           include: {
-            flight: {
-              include: {
-                segments: true,
-              },
-            },
+            seat: true,
           },
         },
       },
@@ -30,94 +72,196 @@ export class BookingSeatService {
       throw new NotFoundException('Booking not found');
     }
 
-    const travelerIds = booking.travelers.map((t) => t.id);
+    await this.bookingExpirationService.ensureActive(booking);
 
-    if (!booking.flightInstance) {
-      throw new NotFoundException('Flight instance not found in booking');
+    assertBookingStatusAllows(booking.status, BookingOperation.ASSIGN_SEATS);
+
+    if (booking.travelers.length === 0) {
+      throw new BadRequestException('Travelers must be added before seat assignment');
     }
 
-    const segmentIds = booking.flightInstance.flight.segments.map((s) => s.id);
+    if (!booking.snapshot) {
+      throw new BadRequestException('Booking snapshot is missing');
+    }
 
-    await this.prisma.$transaction(async (tx) => {
-      for (const seatRequest of seats) {
-        if (!travelerIds.includes(seatRequest.travelerId)) {
-          throw new BadRequestException('Traveler not in booking');
-        }
+    const snapshot = booking.snapshot as unknown as BookingSnapshot;
 
-        if (!segmentIds.includes(seatRequest.segmentId)) {
-          throw new BadRequestException('Invalid segment');
-        }
+    assertSeatSelectionComplete(snapshot, seats, booking.travelers);
 
-        const seat = await tx.flightSeat.findFirst({
-          where: {
-            flightInstanceId: booking.flightInstanceId!,
-            seatNumber: seatRequest.seatNumber,
-            status: 'AVAILABLE',
-          },
+    if (seatAssignmentsMatchRequest(seats, booking.seatAssignments)) {
+      await this.refreshSeatHolds(bookingId, booking.expiresAt);
+      this.bookingMetrics.recordSeatHoldRefreshed();
+
+      if (booking.status !== BookingStatus.SEATS_SELECTED) {
+        await updateBookingIfStatus(
+          this.prisma,
+          bookingId,
+          getAllowedStatusesForOperation(BookingOperation.ASSIGN_SEATS),
+          { status: BookingStatus.SEATS_SELECTED },
+          userId,
+        );
+      }
+
+      await this.bookingsCache.invalidateBooking(bookingId, userId);
+      this.bookingMetrics.recordSeatAssignment('unchanged');
+      this.bookingMetrics.observeSeatAssignmentDuration((Date.now() - startedAt) / 1000);
+
+      return {
+        success: true,
+        unchanged: true,
+      };
+    }
+
+    const segmentsById = new Map<string, BuiltSegment>(
+      snapshot.offer.itineraries
+        .flatMap((itinerary) => itinerary.segments)
+        .map((segment) => [segment.id, segment]),
+    );
+
+    const travelerIds = new Set(booking.travelers.map((traveler) => traveler.id));
+    const assignableStatuses = getAllowedStatusesForOperation(BookingOperation.ASSIGN_SEATS);
+    const resolvedSeatRequests = this.resolveSeatRequests(seats, segmentsById, travelerIds);
+
+    await this.prisma.$transaction(
+      async (tx) => {
+        await assertBookingHasStatus(tx, bookingId, assignableStatuses, userId);
+
+        const currentAssignments = await tx.seatAssignment.findMany({
+          where: { bookingId },
+          select: { id: true },
         });
 
-        if (!seat) {
-          throw new BadRequestException(`Seat ${seatRequest.seatNumber} not found`);
+        if (currentAssignments.length > 0) {
+          await this.seatReleaseService.releaseSeatsForBooking(bookingId, tx, 'reassign');
         }
 
-        try {
-          await tx.seatHold.create({
+        const seatByKey = await this.loadRequestedSeats(tx, resolvedSeatRequests);
+        const holdExpiresAt = resolveSeatHoldExpiresAt(booking.expiresAt);
+        const holdRows: Prisma.SeatHoldCreateManyInput[] = [];
+        const assignmentRows: Prisma.SeatAssignmentCreateManyInput[] = [];
+
+        for (const seatRequest of resolvedSeatRequests) {
+          const seatKey = `${seatRequest.flightInstanceId}:${seatRequest.seatNumber}`;
+          const seat = seatByKey.get(seatKey);
+
+          if (!seat) {
+            throw new BadRequestException(`Seat ${seatRequest.seatNumber} not found`);
+          }
+
+          const reserved = await tx.flightSeat.updateMany({
+            where: {
+              id: seat.id,
+              status: 'AVAILABLE',
+            },
             data: {
-              bookingId,
-              flightSeatId: seat.id,
-              segmentId: seatRequest.segmentId,
-              travelerId: seatRequest.travelerId,
-              expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+              status: 'RESERVED',
             },
           });
-        } catch (e: any) {
-          if (e.code === 'P2002') {
+
+          if (reserved.count !== 1) {
             throw new BadRequestException('Seat already reserved');
           }
 
-          throw e;
-        }
-
-        await tx.seatAssignment.upsert({
-          where: {
-            travelerId_segmentId: {
-              travelerId: seatRequest.travelerId,
-              segmentId: seatRequest.segmentId,
-            },
-          },
-          update: {
+          holdRows.push({
+            bookingId,
             flightSeatId: seat.id,
-          },
-          create: {
+            segmentId: seatRequest.segmentId,
+            travelerId: seatRequest.travelerId,
+            expiresAt: holdExpiresAt,
+          });
+
+          assignmentRows.push({
             travelerId: seatRequest.travelerId,
             flightSeatId: seat.id,
             segmentId: seatRequest.segmentId,
             bookingId,
-          },
-        });
+          });
+        }
 
-        await tx.flightSeat.update({
-          where: {
-            id: seat.id,
-          },
-          data: {
-            status: 'RESERVED',
-          },
-        });
+        try {
+          await tx.seatHold.createMany({ data: holdRows });
+          await tx.seatAssignment.createMany({ data: assignmentRows });
+        } catch (error: unknown) {
+          if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+            throw new BadRequestException('Seat already reserved');
+          }
 
-        await tx.booking.update({
-          where: {
-            id: bookingId,
-          },
-          data: {
-            status: BookingStatus.SEATS_SELECTED,
-          },
-        });
-      }
-    });
+          throw error;
+        }
+
+        await updateBookingIfStatus(
+          tx,
+          bookingId,
+          assignableStatuses,
+          { status: BookingStatus.SEATS_SELECTED },
+          userId,
+        );
+      },
+      { timeout: 15_000 },
+    );
+
+    await this.bookingsCache.invalidateBooking(bookingId, userId);
+    this.bookingMetrics.recordSeatAssignment('success');
+    this.bookingMetrics.observeSeatAssignmentDuration((Date.now() - startedAt) / 1000);
 
     return {
       success: true,
+      unchanged: false,
     };
+  }
+
+  private resolveSeatRequests(
+    seats: AssignSeatDto[],
+    segmentsById: Map<string, BuiltSegment>,
+    travelerIds: Set<string>,
+  ): ResolvedSeatRequest[] {
+    return seats.map((seatRequest) => {
+      if (!travelerIds.has(seatRequest.travelerId)) {
+        throw new BadRequestException('Traveler not in booking');
+      }
+
+      const segment = segmentsById.get(seatRequest.segmentId);
+
+      if (!segment) {
+        throw new BadRequestException('Invalid segment');
+      }
+
+      return {
+        ...seatRequest,
+        flightInstanceId: segment.flightInstanceId,
+      };
+    });
+  }
+
+  private async loadRequestedSeats(
+    tx: Prisma.TransactionClient,
+    seatRequests: ResolvedSeatRequest[],
+  ): Promise<Map<string, { id: string }>> {
+    const seats = await tx.flightSeat.findMany({
+      where: {
+        OR: seatRequests.map((seatRequest) => ({
+          flightInstanceId: seatRequest.flightInstanceId,
+          seatNumber: seatRequest.seatNumber,
+        })),
+      },
+      select: {
+        id: true,
+        flightInstanceId: true,
+        seatNumber: true,
+      },
+    });
+
+    return new Map(
+      seats.map((seat) => [`${seat.flightInstanceId}:${seat.seatNumber}`, { id: seat.id }]),
+    );
+  }
+
+  private async refreshSeatHolds(bookingId: string, bookingExpiresAt: Date) {
+    await this.prisma.seatHold.updateMany({
+      where: { bookingId },
+      data: {
+        expiresAt: resolveSeatHoldExpiresAt(bookingExpiresAt),
+      },
+    });
   }
 }

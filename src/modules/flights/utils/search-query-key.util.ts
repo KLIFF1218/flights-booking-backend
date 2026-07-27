@@ -12,6 +12,7 @@ export function buildSearchQueryKey(data: SearchFlightsDto): string {
       adults: data.passengers.adults,
       children: data.passengers.children ?? 0,
       infants: data.passengers.infants ?? 0,
+      seatedInfants: data.passengers.seatedInfants ?? 0,
     },
     travelClass: data.travelClass,
     currencyCode: data.currencyCode ?? null,

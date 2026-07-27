@@ -153,9 +153,9 @@ export class CreateFlightOrderInputDto {
   @IsOptional()
   @IsEnum(PaymentProvider)
   @ApiPropertyOptional({
-    example: 'YOOKASSA',
+    example: 'STRIPE',
     enum: PaymentProvider,
-    description: 'Способ оплаты (если не указан — используется по умолчанию)',
+    description: 'Payment method (defaults if not specified)',
   })
   paymentProvider?: PaymentProvider;
 

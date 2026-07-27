@@ -1,14 +1,26 @@
-import type { Currency, TravelClass } from '@prisma/client';
+import type { Currency, FareBrand, TravelClass } from '@prisma/client';
 import type {
   FlightOffer,
   Itinerary,
   PassengerCounts,
 } from '../interfaces/flight-offers.interface';
 import type { FlightInstanceWithRelations } from '../providers/prisma/flight-instance.type';
-import { buildTravelerPricings, calculateTotalPrice } from './traveler-pricing.util';
+import {
+  buildTravelerPricings,
+  calculateTotalPrice,
+  MissingFareError,
+} from './traveler-pricing.util';
 import { mapSegments } from '../services/flight-segment.mapper';
 import { buildTimeline } from './timeline.util';
 import { formatDuration } from './time.util';
+import { buildOneWayLeg } from './offer-flight-instances.util';
+import { buildFarePriceBreakdown, formatOfferPrice } from './fare-charges.util';
+import { countSeatsRequired } from './passenger-counts.util';
+import {
+  DEFAULT_SEARCH_FARE_BRAND,
+  OFFER_SOURCE_INTERNAL_DB,
+  resolveFareBrandRules,
+} from '../constants/fare-brand.constants';
 
 export function buildOneWayOffers(
   instances: FlightInstanceWithRelations[],
@@ -16,39 +28,61 @@ export function buildOneWayOffers(
   travelClass: TravelClass,
   targetCurrency: Currency,
   offerCache: Map<string, FlightOffer>,
+  fareBrand: FareBrand = DEFAULT_SEARCH_FARE_BRAND,
 ): FlightOffer[] {
-  return instances.map((instance) => {
-    const pricing = calculateTotalPrice(instance, passengers, travelClass, targetCurrency);
+  return instances.flatMap((instance) => {
+    try {
+      const pricing = calculateTotalPrice(
+        instance,
+        passengers,
+        travelClass,
+        targetCurrency,
+        fareBrand,
+      );
+      const priceBreakdown = buildFarePriceBreakdown(pricing.base, countSeatsRequired(passengers));
+      const brandRules = resolveFareBrandRules(fareBrand, travelClass);
 
-    const segments = mapSegments(instance);
+      const segments = mapSegments(instance);
 
-    const timeline = buildTimeline(instance);
-    const departureTime = timeline[0].departureAt;
-    const arrivalTime = timeline[timeline.length - 1].arrivalAt;
-    const totalDurationMinutes = Math.floor(
-      (arrivalTime.getTime() - departureTime.getTime()) / 60000,
-    );
+      const timeline = buildTimeline(instance);
+      const departureTime = timeline[0].departureAt;
+      const arrivalTime = timeline[timeline.length - 1].arrivalAt;
+      const totalDurationMinutes = Math.floor(
+        (arrivalTime.getTime() - departureTime.getTime()) / 60000,
+      );
 
-    const itinerary: Itinerary = {
-      duration: formatDuration(totalDurationMinutes),
-      segments,
-    };
+      const itinerary: Itinerary = {
+        duration: formatDuration(totalDurationMinutes),
+        segments,
+      };
 
-    const offer: FlightOffer = {
-      id: instance.id,
-      numberOfBookableSeats: instance.seatsAvailable,
-      itineraries: [itinerary],
-      price: {
-        currency: targetCurrency,
-        total: pricing.total.toFixed(2),
-        base: pricing.total.toFixed(2),
-        grandTotal: pricing.total.toFixed(2),
-        fees: [],
-      },
-      travelerPricings: buildTravelerPricings(instance, passengers, travelClass, targetCurrency),
-    };
+      const offer: FlightOffer = {
+        id: instance.id,
+        source: OFFER_SOURCE_INTERNAL_DB,
+        fareBrand,
+        changeable: brandRules.changeable,
+        refundable: brandRules.refundable,
+        currencyCode: targetCurrency,
+        legs: [buildOneWayLeg(instance.id)],
+        numberOfBookableSeats: instance.seatsAvailable,
+        itineraries: [itinerary],
+        price: formatOfferPrice(targetCurrency, priceBreakdown),
+        travelerPricings: buildTravelerPricings(
+          instance,
+          passengers,
+          travelClass,
+          targetCurrency,
+          fareBrand,
+        ),
+      };
 
-    offerCache.set(instance.id, offer);
-    return offer;
+      offerCache.set(instance.id, offer);
+      return [offer];
+    } catch (error) {
+      if (error instanceof MissingFareError) {
+        return [];
+      }
+      throw error;
+    }
   });
 }
