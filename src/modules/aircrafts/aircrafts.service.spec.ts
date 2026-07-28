@@ -88,9 +88,7 @@ describe('AircraftsService', () => {
     });
 
     it('returns seatsCount 0 when aircraft has no layout', async () => {
-      prisma.aircraft.findMany.mockResolvedValue([
-        prismaRow({ aircraftLayout: null }),
-      ]);
+      prisma.aircraft.findMany.mockResolvedValue([prismaRow({ aircraftLayout: null })]);
 
       await expect(service.findAll()).resolves.toEqual([
         {

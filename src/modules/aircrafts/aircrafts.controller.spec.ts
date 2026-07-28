@@ -18,7 +18,9 @@ describe('AircraftsController', () => {
   });
 
   it('findAll delegates to aircraftsService.findAll', async () => {
-    const expected = [{ id: '1', code: 'A320', name: 'Airbus A320', airlineId: 'al_1', seatsCount: 0 }];
+    const expected = [
+      { id: '1', code: 'A320', name: 'Airbus A320', airlineId: 'al_1', seatsCount: 0 },
+    ];
     service.findAll.mockResolvedValue(expected);
 
     await expect(controller.findAll()).resolves.toEqual(expected);

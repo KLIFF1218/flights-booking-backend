@@ -89,6 +89,9 @@ export class SearchFlightsResponse {
   })
   expiresAt!: string | null;
 
-  @ApiProperty({ type: SearchFlightsFiltersDto, description: 'Facet counts for the full result set' })
+  @ApiProperty({
+    type: SearchFlightsFiltersDto,
+    description: 'Facet counts for the full result set',
+  })
   filters!: SearchFlightsFiltersDto;
 }

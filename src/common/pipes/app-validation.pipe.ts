@@ -1,4 +1,10 @@
-import { Inject, Injectable, Scope, ValidationPipe, type ValidationPipeOptions } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Scope,
+  ValidationPipe,
+  type ValidationPipeOptions,
+} from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import type { Request } from 'express';
 
@@ -16,7 +22,9 @@ const YOOKASSA_WEBHOOK_VALIDATION_OPTIONS: ValidationPipeOptions = {
   forbidNonWhitelisted: false,
 };
 
-export function isYookassaWebhookRequest(request: Pick<Request, 'method' | 'path' | 'url'>): boolean {
+export function isYookassaWebhookRequest(
+  request: Pick<Request, 'method' | 'path' | 'url'>,
+): boolean {
   if (request.method !== 'POST') {
     return false;
   }

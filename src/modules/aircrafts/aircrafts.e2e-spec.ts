@@ -139,7 +139,13 @@ describe('Aircrafts E2E', () => {
     );
 
     for (const aircraft of res.body) {
-      expect(Object.keys(aircraft).sort()).toEqual(['airlineId', 'code', 'id', 'name', 'seatsCount']);
+      expect(Object.keys(aircraft).sort()).toEqual([
+        'airlineId',
+        'code',
+        'id',
+        'name',
+        'seatsCount',
+      ]);
     }
   });
 

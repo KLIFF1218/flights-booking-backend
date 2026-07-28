@@ -250,8 +250,6 @@ describe('FlightsService', () => {
   it('throws when search page is missing from cache', async () => {
     searchStore.getSearchResults.mockResolvedValue(null);
 
-    await expect(service.getSearchPage('missing')).rejects.toThrow(
-      'Search expired or not found',
-    );
+    await expect(service.getSearchPage('missing')).rejects.toThrow('Search expired or not found');
   });
 });

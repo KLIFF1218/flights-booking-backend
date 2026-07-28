@@ -42,9 +42,7 @@ export class WebhookService {
     const result = await this.stripeService.handleWebhook(event);
 
     if (!result) {
-      runSafely(() =>
-        this.metrics.recordWebhookIgnored(PaymentProvider.STRIPE, 'unhandled_event'),
-      );
+      runSafely(() => this.metrics.recordWebhookIgnored(PaymentProvider.STRIPE, 'unhandled_event'));
       return { ok: true };
     }
 

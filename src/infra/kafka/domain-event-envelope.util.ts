@@ -22,9 +22,7 @@ type OutboxMessageLike = {
 
 export function buildDomainEventEnvelope(msg: OutboxMessageLike): DomainEventEnvelope {
   const payload =
-    msg.payload && typeof msg.payload === 'object'
-      ? (msg.payload as Record<string, unknown>)
-      : {};
+    msg.payload && typeof msg.payload === 'object' ? (msg.payload as Record<string, unknown>) : {};
 
   const occurredAt =
     typeof payload.occurredAt === 'string'
@@ -102,7 +100,7 @@ export function parseDomainEventEnvelope(value: unknown): DomainEventEnvelope | 
         : DOMAIN_EVENT_SCHEMA_VERSION,
     correlationId:
       typeof candidate.correlationId === 'string' ? candidate.correlationId : undefined,
-    payload: candidate.payload as Record<string, unknown>,
+    payload: candidate.payload,
   };
 }
 

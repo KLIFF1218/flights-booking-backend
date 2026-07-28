@@ -1,7 +1,4 @@
-import {
-  ServiceUnavailableException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { Provider } from '@prisma/client';
@@ -70,7 +67,10 @@ describe('SocialService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: Logger, useValue: { error: jest.fn(), log: jest.fn() } },
         { provide: TokenService, useValue: tokenService },
-        { provide: MetricsService, useValue: { recordLogin: jest.fn(), recordLoginFailure: jest.fn() } },
+        {
+          provide: MetricsService,
+          useValue: { recordLogin: jest.fn(), recordLoginFailure: jest.fn() },
+        },
         { provide: RedisService, useValue: redis },
         { provide: ConfigService, useValue: vkConfig },
       ],
@@ -90,9 +90,7 @@ describe('SocialService', () => {
 
   it('prepareVkState rejects duplicate state', async () => {
     redis.setIfNotExists.mockResolvedValue(false);
-    await expect(service.prepareVkState('state-123')).rejects.toBeInstanceOf(
-      UnauthorizedException,
-    );
+    await expect(service.prepareVkState('state-123')).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
   it('prepareVkState fails when VK is not configured', async () => {
@@ -158,15 +156,13 @@ describe('SocialService', () => {
       data: { user: { email: 'linked@example.com', first_name: 'A', last_name: 'B' } },
     });
 
-    prisma.user.findUnique
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({
-        id: 'user-email',
-        email: 'linked@example.com',
-        emailVerifiedAt: new Date(),
-        firstName: null,
-        lastName: null,
-      });
+    prisma.user.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      id: 'user-email',
+      email: 'linked@example.com',
+      emailVerifiedAt: new Date(),
+      firstName: null,
+      lastName: null,
+    });
 
     prisma.user.update.mockResolvedValue({
       id: 'user-email',

@@ -25,10 +25,7 @@ import { ForgotPasswordDto } from '../dtos/forgot-password.dto';
 import { ResetPasswordDto } from '../dtos/reset-password.dto';
 import { ChangePasswordDto } from '../dtos/change-password.dto';
 import { OkResponseDto } from '../dtos/ok.response.dto';
-import {
-  RevokeSessionResponseDto,
-  SessionsListResponseDto,
-} from '../dtos/session.response.dto';
+import { RevokeSessionResponseDto, SessionsListResponseDto } from '../dtos/session.response.dto';
 import type { Request, Response } from 'express';
 import {
   Authorized,
@@ -205,12 +202,7 @@ export class AuthController {
     @Body() dto: ChangePasswordDto,
     @Res({ passthrough: true }) res: Response,
   ): Promise<OkResponseDto> {
-    return this.passwordLifecycle.changePassword(
-      userId,
-      dto.currentPassword,
-      dto.newPassword,
-      res,
-    );
+    return this.passwordLifecycle.changePassword(userId, dto.currentPassword, dto.newPassword, res);
   }
 
   @Post('refresh')
@@ -242,7 +234,8 @@ export class AuthController {
   @ApiCookieAuth(SWAGGER_REFRESH_COOKIE_AUTH)
   @ApiOperation({
     summary: 'List active sessions',
-    description: 'Returns non-revoked, non-expired refresh sessions. Marks the current cookie session.',
+    description:
+      'Returns non-revoked, non-expired refresh sessions. Marks the current cookie session.',
   })
   @ApiOkResponse({ type: SessionsListResponseDto })
   @ApiUserAuthErrors()

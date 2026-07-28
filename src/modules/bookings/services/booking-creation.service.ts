@@ -1,7 +1,13 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { Logger } from 'nestjs-pino';
-import { BookingProvider, BookingStatus, EnumTransport, PaymentProvider, Prisma } from '@prisma/client';
+import {
+  BookingProvider,
+  BookingStatus,
+  EnumTransport,
+  PaymentProvider,
+  Prisma,
+} from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { addMinutes } from 'date-fns';
 import { BOOKING_EXPIRATION_MINUTES } from '../constants/booking-expiration.constants';
@@ -149,10 +155,7 @@ export class BookingCreationService {
     }
 
     const actualPrice = Number(latestPricing.price.total);
-    assertPaymentProviderCurrencyCompatible(
-      resolvedPaymentProvider,
-      latestPricing.price.currency,
-    );
+    assertPaymentProviderCurrencyCompatible(resolvedPaymentProvider, latestPricing.price.currency);
 
     const expiresAt = addMinutes(new Date(), BOOKING_EXPIRATION_MINUTES);
     const airlineCode = primaryFlightInstance.flight.airline.code;

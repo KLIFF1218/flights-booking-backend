@@ -55,7 +55,9 @@ export class DomainAnalyticsService {
     private readonly logger: Logger,
   ) {}
 
-  async applyDomainEvent(envelope: DomainEventEnvelope): Promise<'applied' | 'duplicate' | 'skipped'> {
+  async applyDomainEvent(
+    envelope: DomainEventEnvelope,
+  ): Promise<'applied' | 'duplicate' | 'skipped'> {
     if (!isAnalyticsEventType(envelope.eventType)) {
       return 'skipped';
     }

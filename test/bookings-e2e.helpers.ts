@@ -14,10 +14,7 @@ type SeatSelection = {
   seatNumber: string;
 };
 
-export async function findSearchOffer(
-  app: INestApplication,
-  apiV1: string,
-): Promise<SearchOffer> {
+export async function findSearchOffer(app: INestApplication, apiV1: string): Promise<SearchOffer> {
   for (const offset of [2, 1, 3, 4, 5]) {
     const d = new Date();
     d.setUTCDate(d.getUTCDate() + offset);

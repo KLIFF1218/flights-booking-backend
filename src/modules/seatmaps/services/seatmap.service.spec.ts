@@ -1,10 +1,6 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import { ConflictException, NotFoundException } from '@nestjs/common';
-import {
-  Currency,
-  SeatType,
-  TravelClass,
-} from '@prisma/client';
+import { Currency, SeatType, TravelClass } from '@prisma/client';
 import { SeatMapsService } from './seatmap.service';
 import { FlightsSearchStore } from '../../flights/services/flights-cache.service';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
@@ -40,14 +36,15 @@ function buildFlightInstance(
     id: 'fi-1',
     aircraft: {
       code: overrides.aircraftCode ?? 'A320',
-      aircraftLayout: overrides.layout === null
-        ? null
-        : {
-            width: 3,
-            length: 2,
-            facilities: [{ x: 2, y: 0, type: 'LAVATORY' }],
-            ...(overrides.layout ?? {}),
-          },
+      aircraftLayout:
+        overrides.layout === null
+          ? null
+          : {
+              width: 3,
+              length: 2,
+              facilities: [{ x: 2, y: 0, type: 'LAVATORY' }],
+              ...(overrides.layout ?? {}),
+            },
     },
     fares: overrides.fares ?? [{ currency: Currency.USD }],
     seats: overrides.seats ?? [
@@ -173,9 +170,7 @@ describe('SeatMapsService', () => {
   });
 
   it('throws ConflictException when aircraft layout is missing', async () => {
-    prisma.flightInstance.findMany.mockResolvedValue([
-      buildFlightInstance({ layout: null }),
-    ]);
+    prisma.flightInstance.findMany.mockResolvedValue([buildFlightInstance({ layout: null })]);
 
     await expect(service.getSeatMap(dto)).rejects.toThrow(
       new ConflictException('Aircraft layout is not configured'),

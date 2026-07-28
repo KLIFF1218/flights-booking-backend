@@ -204,7 +204,7 @@ describe('Auth — E2E Tests', () => {
 
     it('should reject refresh JWT used as Bearer access token', async () => {
       const session = await loginAs('user@test.com');
-      const refreshJwt = decodeURIComponent(session.refreshCookie.split('=')[1]!);
+      const refreshJwt = decodeURIComponent(session.refreshCookie.split('=')[1]);
 
       await request(app.getHttpServer())
         .get(`${API_V1}/users/me`)
@@ -214,7 +214,7 @@ describe('Auth — E2E Tests', () => {
 
     it('should reject refresh cookie signed with access secret', async () => {
       const session = await loginAs('user@test.com');
-      const decoded = jwt.decode(session.accessToken) as { id: string };
+      const decoded = jwt.decode(session.accessToken);
       const forgedRefresh = jwt.sign(
         { id: decoded.id, typ: 'refresh' },
         {
@@ -380,7 +380,7 @@ describe('Auth — E2E Tests', () => {
   });
 
   describe('Sessions API', () => {
-  beforeEach(async () => {
+    beforeEach(async () => {
       await prisma.user.create({
         data: {
           email: 'sessions@test.com',

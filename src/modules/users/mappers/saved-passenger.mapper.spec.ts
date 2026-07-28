@@ -1,8 +1,5 @@
 import { PassengerType } from '@prisma/client';
-import {
-  mapTravelerTypeToPassengerType,
-  SavedPassengerMapper,
-} from './saved-passenger.mapper';
+import { mapTravelerTypeToPassengerType, SavedPassengerMapper } from './saved-passenger.mapper';
 import type { CreateSavedPassengerDto } from '../dtos/create-saved-passenger.dto';
 
 function buildDto(overrides: Partial<CreateSavedPassengerDto> = {}): CreateSavedPassengerDto {

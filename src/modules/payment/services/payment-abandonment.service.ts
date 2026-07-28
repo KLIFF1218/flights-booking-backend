@@ -119,9 +119,7 @@ export class PaymentAbandonmentService {
       await this.cancelPendingPaymentAtProviderBestEffort(transaction);
       await this.bookingsCache.invalidateBooking(bookingId, booking.userId);
       this.bookingMetrics.recordBookingExpired('payment_abandoned');
-      runSafely(() =>
-        this.metrics.recordPaymentAbandoned(String(transaction.provider), 'expired'),
-      );
+      runSafely(() => this.metrics.recordPaymentAbandoned(String(transaction.provider), 'expired'));
       this.logger.log({ bookingId }, 'Payment session abandoned');
     }
 

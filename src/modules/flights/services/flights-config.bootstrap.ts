@@ -16,9 +16,7 @@ export class FlightsConfigBootstrap implements OnModuleInit {
 
     configureTurnaround({
       domesticMinutes: Number(this.config.get('MIN_DOMESTIC_TURNAROUND_MINUTES') ?? 120),
-      internationalMinutes: Number(
-        this.config.get('MIN_INTERNATIONAL_TURNAROUND_MINUTES') ?? 180,
-      ),
+      internationalMinutes: Number(this.config.get('MIN_INTERNATIONAL_TURNAROUND_MINUTES') ?? 180),
     });
   }
 }

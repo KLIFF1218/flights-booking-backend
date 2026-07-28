@@ -58,9 +58,9 @@ describe('EmailTokenService', () => {
     prisma.emailToken.findFirst.mockResolvedValue({ id: 'et-1', userId: 'user-1' });
     prisma.emailToken.updateMany.mockResolvedValueOnce({ count: 1 });
 
-    await expect(
-      service.consume(raw, EmailTokenPurpose.PASSWORD_RESET),
-    ).resolves.toEqual({ userId: 'user-1' });
+    await expect(service.consume(raw, EmailTokenPurpose.PASSWORD_RESET)).resolves.toEqual({
+      userId: 'user-1',
+    });
 
     expect(prisma.emailToken.findFirst).toHaveBeenCalledWith({
       where: {
@@ -76,17 +76,17 @@ describe('EmailTokenService', () => {
   it('consume rejects unknown or expired token', async () => {
     prisma.emailToken.findFirst.mockResolvedValue(null);
 
-    await expect(
-      service.consume('missing', EmailTokenPurpose.EMAIL_VERIFY),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(service.consume('missing', EmailTokenPurpose.EMAIL_VERIFY)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
   });
 
   it('consume rejects concurrent double-use', async () => {
     prisma.emailToken.findFirst.mockResolvedValue({ id: 'et-1', userId: 'user-1' });
     prisma.emailToken.updateMany.mockResolvedValueOnce({ count: 0 });
 
-    await expect(
-      service.consume('token', EmailTokenPurpose.EMAIL_VERIFY),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(service.consume('token', EmailTokenPurpose.EMAIL_VERIFY)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
   });
 });

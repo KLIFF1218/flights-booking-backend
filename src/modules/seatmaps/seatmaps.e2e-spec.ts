@@ -2,10 +2,7 @@ import { type INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { API_V1, createSeatmapsE2eApp } from '../../../test/seatmaps-e2e-app.util';
-import {
-  findSearchOffer,
-  registerVerifiedUser,
-} from '../../../test/bookings-e2e.helpers';
+import { findSearchOffer, registerVerifiedUser } from '../../../test/bookings-e2e.helpers';
 import { seedDemoDataset } from '../../../scripts/seeds/demo.seed';
 
 jest.setTimeout(180_000);
@@ -34,7 +31,12 @@ describe('Seatmaps — E2E', () => {
   });
 
   it('returns seat map for a cached search offer', async () => {
-    const token = await registerVerifiedUser(app, API_V1, prisma, `seatmap-${Date.now()}@test.local`);
+    const token = await registerVerifiedUser(
+      app,
+      API_V1,
+      prisma,
+      `seatmap-${Date.now()}@test.local`,
+    );
     const { searchId, offerId } = await findSearchOffer(app, API_V1);
 
     const response = await request(app.getHttpServer())
@@ -55,7 +57,12 @@ describe('Seatmaps — E2E', () => {
   });
 
   it('returns 404 when offer is missing from search cache', async () => {
-    const token = await registerVerifiedUser(app, API_V1, prisma, `seatmap-404-${Date.now()}@test.local`);
+    const token = await registerVerifiedUser(
+      app,
+      API_V1,
+      prisma,
+      `seatmap-404-${Date.now()}@test.local`,
+    );
     const { searchId } = await findSearchOffer(app, API_V1);
 
     await request(app.getHttpServer())

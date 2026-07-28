@@ -3,6 +3,7 @@ import {
   FareBrand,
   FlightStatus,
   PassengerType,
+  Prisma,
   TravelClass,
 } from '@prisma/client';
 import type { FlightOffer } from '../interfaces/flight-offers.interface';
@@ -28,7 +29,7 @@ export function buildFlightFares(instanceId: string) {
       passengerType: PassengerType.ADULT,
       travelClass: TravelClass.ECONOMY,
       fareBrand: FareBrand.LIGHT,
-      basePrice: 250,
+      basePrice: new Prisma.Decimal(250),
       currency: Currency.USD,
       fareBasis: 'ECONOMY_LIGHT',
       checkedBags: 0,
@@ -86,7 +87,7 @@ export function buildMockFlightInstance(opts: {
       ],
     },
     fares: buildFlightFares(opts.id),
-  } as FlightInstanceWithRelations;
+  } as unknown as FlightInstanceWithRelations;
 }
 
 export function buildCachedPricingOffer(

@@ -5,10 +5,7 @@ import { Logger } from 'nestjs-pino';
 import { DomainEventsService } from 'src/infra/domain-events/domain-events.service';
 import { parseKafkaDomainTopics } from './domain-event.constants';
 import { resolveBookingIdFromEnvelope } from './domain-event-envelope.util';
-import {
-  normalizeDomainEventEnvelope,
-  parseKafkaMessageJson,
-} from './kafka-domain-message.util';
+import { normalizeDomainEventEnvelope, parseKafkaMessageJson } from './kafka-domain-message.util';
 
 @Injectable()
 export class BookingAuditConsumer implements OnModuleInit, OnModuleDestroy {

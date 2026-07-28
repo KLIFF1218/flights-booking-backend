@@ -32,10 +32,7 @@ function throwPricingRepriceError(message: string, reason: PricingRepriceReason)
 
 export function assertPricingQuoteActive(quote: { expiresAt?: string }): void {
   if (quote.expiresAt && new Date(quote.expiresAt) < new Date()) {
-    throwPricingRepriceError(
-      'Pricing quote expired. Please refresh the price.',
-      'QUOTE_EXPIRED',
-    );
+    throwPricingRepriceError('Pricing quote expired. Please refresh the price.', 'QUOTE_EXPIRED');
   }
 }
 

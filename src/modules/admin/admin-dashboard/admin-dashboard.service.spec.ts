@@ -15,10 +15,7 @@ describe('AdminDashboardService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    prisma.user.count
-      .mockResolvedValueOnce(100)
-      .mockResolvedValueOnce(10)
-      .mockResolvedValueOnce(5);
+    prisma.user.count.mockResolvedValueOnce(100).mockResolvedValueOnce(10).mockResolvedValueOnce(5);
     prisma.booking.count
       .mockResolvedValueOnce(50)
       .mockResolvedValueOnce(8)
@@ -30,9 +27,7 @@ describe('AdminDashboardService', () => {
       .mockResolvedValueOnce({ _sum: { amount: '2000' } })
       .mockResolvedValueOnce({ _sum: { amount: '1000' } });
     prisma.$queryRaw.mockResolvedValue([]);
-    prisma.booking.groupBy.mockResolvedValue([
-      { status: 'PAID', _count: { status: 3 } },
-    ]);
+    prisma.booking.groupBy.mockResolvedValue([{ status: 'PAID', _count: { status: 3 } }]);
     prisma.booking.findMany.mockResolvedValue([]);
     domainAnalytics.getEventAnalytics.mockResolvedValue({
       periodDays: 30,

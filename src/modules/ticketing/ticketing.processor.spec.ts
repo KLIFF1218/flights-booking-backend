@@ -250,12 +250,10 @@ describe('TicketingProcessor', () => {
   });
 
   it('escalates when booking is not found', async () => {
-    prisma.booking.findUnique
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({
-        userId: 'user-1',
-        user: { email: 'user@example.com' },
-      });
+    prisma.booking.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      userId: 'user-1',
+      user: { email: 'user@example.com' },
+    });
 
     await expect(processor.process({ data: { bookingId: 'booking-1' } } as any)).rejects.toThrow(
       TicketingUnrecoverableError,
@@ -276,11 +274,11 @@ describe('TicketingProcessor', () => {
         user: { email: 'user@example.com' },
       });
 
-    await expect(processor.process({ data: { bookingId: 'booking-1' } } as any)).rejects.toMatchObject(
-      {
-        code: TicketingErrorCode.SNAPSHOT_MISSING,
-      },
-    );
+    await expect(
+      processor.process({ data: { bookingId: 'booking-1' } } as any),
+    ).rejects.toMatchObject({
+      code: TicketingErrorCode.SNAPSHOT_MISSING,
+    });
 
     expect(outbox.enqueue).toHaveBeenCalled();
   });
@@ -303,11 +301,11 @@ describe('TicketingProcessor', () => {
       });
     prisma.booking.update.mockResolvedValue(booking);
 
-    await expect(processor.process({ data: { bookingId: 'booking-1' } } as any)).rejects.toMatchObject(
-      {
-        code: TicketingErrorCode.PRICING_NOT_FOUND,
-      },
-    );
+    await expect(
+      processor.process({ data: { bookingId: 'booking-1' } } as any),
+    ).rejects.toMatchObject({
+      code: TicketingErrorCode.PRICING_NOT_FOUND,
+    });
 
     expect(outbox.enqueue).toHaveBeenCalled();
   });

@@ -16,7 +16,9 @@ export class BookingNotificationsService {
     private readonly logger: Logger,
   ) {}
 
-  async handleDomainEvent(envelope: DomainEventEnvelope): Promise<'created' | 'skipped' | 'duplicate'> {
+  async handleDomainEvent(
+    envelope: DomainEventEnvelope,
+  ): Promise<'created' | 'skipped' | 'duplicate'> {
     if (!isNotificationEventType(envelope.eventType)) {
       return 'skipped';
     }

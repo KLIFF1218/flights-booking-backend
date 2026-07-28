@@ -1,4 +1,4 @@
-import { PaymentProvider, BookingStatus } from '@prisma/client';
+import { PaymentProvider, BookingStatus, Currency } from '@prisma/client';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { BookingPaymentService } from './booking-payment.service';
 import { type PrismaService } from 'src/infra/db/prisma/prisma.service';
@@ -61,7 +61,7 @@ describe('BookingPaymentService', () => {
       id: 'booking-1',
       userId: 'user-1',
       totalPrice: 10000,
-      currency: 'RUB',
+      currency: Currency.USD,
       snapshot: {},
     });
     paymentService.createPayment.mockResolvedValue({ redirectUrl: 'https://pay.example' });
@@ -103,7 +103,7 @@ describe('BookingPaymentService', () => {
       userId: 'user-1',
       status: BookingStatus.PAYMENT_PENDING,
       totalPrice: 10000,
-      currency: 'RUB',
+      currency: Currency.USD,
       snapshot: { paymentProvider: PaymentProvider.STRIPE },
     });
     paymentService.resumePayment.mockResolvedValue({
@@ -118,7 +118,7 @@ describe('BookingPaymentService', () => {
       bookingId: 'booking-1',
       userId: 'user-1',
       amount: 10000,
-      currency: 'RUB',
+      currency: Currency.USD,
       provider: PaymentProvider.STRIPE,
     });
     expect(result.paymentRedirectUrl).toBe('https://pay.example/resume');
@@ -132,9 +132,7 @@ describe('BookingPaymentService', () => {
       snapshot: {},
     });
 
-    await expect(service.resumePayment('booking-1', 'user-1')).rejects.toThrow(
-      BadRequestException,
-    );
+    await expect(service.resumePayment('booking-1', 'user-1')).rejects.toThrow(BadRequestException);
   });
 
   it('rejects resume when booking is missing', async () => {

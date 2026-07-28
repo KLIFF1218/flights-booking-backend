@@ -1,10 +1,7 @@
 import { DOMAIN_EVENT_SCHEMA_VERSION } from './domain-event.constants';
-import {
-  parseDomainEventEnvelope,
-  type DomainEventEnvelope,
-} from './domain-event-envelope.util';
+import { parseDomainEventEnvelope, type DomainEventEnvelope } from './domain-event-envelope.util';
 
-export function parseKafkaMessageJson(raw: string | undefined): unknown | null {
+export function parseKafkaMessageJson(raw: string | undefined): unknown {
   if (!raw) {
     return null;
   }
@@ -26,8 +23,7 @@ export function normalizeDomainEventEnvelope(
     return envelope;
   }
 
-  const payload =
-    parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+  const payload = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
 
   const bookingId = typeof payload.bookingId === 'string' ? payload.bookingId : '';
   const occurredAt =

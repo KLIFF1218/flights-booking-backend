@@ -87,11 +87,7 @@ describe('FlightsSearchStore', () => {
     await service.saveLastPricing('search-1', 'offer-1', quote as any, 120);
     await expect(service.getLastPricing('search-1', 'offer-1')).resolves.toEqual(quote);
 
-    expect(redis.set).toHaveBeenCalledWith(
-      'flights:pricing:last:search-1:offer-1',
-      quote,
-      120,
-    );
+    expect(redis.set).toHaveBeenCalledWith('flights:pricing:last:search-1:offer-1', quote, 120);
   });
 
   it('saves and loads seat map cache', async () => {
@@ -101,11 +97,7 @@ describe('FlightsSearchStore', () => {
     await service.saveSeatMap('search-1', 'offer-1', seatMap, 300);
     await expect(service.getSeatMap('search-1', 'offer-1')).resolves.toEqual(seatMap);
 
-    expect(redis.set).toHaveBeenCalledWith(
-      'flights:seatmap:search-1:offer-1',
-      seatMap,
-      300,
-    );
+    expect(redis.set).toHaveBeenCalledWith('flights:seatmap:search-1:offer-1', seatMap, 300);
   });
 
   it('mutates cached offers via redis scan', async () => {

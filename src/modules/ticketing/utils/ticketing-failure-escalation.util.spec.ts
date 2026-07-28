@@ -98,12 +98,7 @@ describe('escalateTicketingFailure', () => {
       }),
     );
 
-    await escalateTicketingFailure(
-      deps(),
-      'booking-1',
-      TicketingErrorCode.NO_TRAVELERS,
-      'user-1',
-    );
+    await escalateTicketingFailure(deps(), 'booking-1', TicketingErrorCode.NO_TRAVELERS, 'user-1');
 
     expect(bookingMetrics.recordTicketingFailureEscalationFailed).toHaveBeenCalledWith(
       TicketingErrorCode.NO_TRAVELERS,

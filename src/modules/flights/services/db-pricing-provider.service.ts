@@ -224,14 +224,10 @@ export class DbPricingProvider implements FlightPricingProvider {
         if (!count) continue;
         const fare = instance.fares.find(
           (f) =>
-            f.passengerType === type &&
-            f.travelClass === travelClass &&
-            f.fareBrand === fareBrand,
+            f.passengerType === type && f.travelClass === travelClass && f.fareBrand === fareBrand,
         );
         if (!fare) {
-          throw new NotFoundException(
-            `Fare not found for ${type} ${travelClass} ${fareBrand}`,
-          );
+          throw new NotFoundException(`Fare not found for ${type} ${travelClass} ${fareBrand}`);
         }
         const convertedPrice = convert(Number(fare.basePrice), fare.currency, targetCurrency);
         basePrice += convertedPrice * count;

@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EmailTokenPurpose, RevokedReason } from '@prisma/client';
 import type { Response } from 'express';
@@ -61,11 +57,7 @@ export class PasswordLifecycleService {
     return { ok: true };
   }
 
-  async resetPassword(
-    token: string,
-    newPassword: string,
-    res?: Response,
-  ): Promise<{ ok: true }> {
+  async resetPassword(token: string, newPassword: string, res?: Response): Promise<{ ok: true }> {
     const { userId } = await this.emailTokens.consume(token, EmailTokenPurpose.PASSWORD_RESET);
 
     const user = await this.prisma.user.findUnique({

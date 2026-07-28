@@ -1,11 +1,5 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiBearerAuth,
-  ApiOperation,
-  ApiOkResponse,
-  ApiQuery,
-} from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiOkResponse, ApiQuery } from '@nestjs/swagger';
 import { AircraftsService } from '../aircrafts.service';
 import { Protected, Roles } from 'src/common/decorators';
 import { Role } from '@prisma/client';

@@ -19,7 +19,12 @@ import { SeatReleaseService } from './seat-release.service';
 import { BookingExpirationService } from './booking-expiration.service';
 import { BookingStatus, EnumTransport, Prisma } from '@prisma/client';
 import { BookingSnapshot } from '../interfaces/booking-snapshot.interface';
-import { assertOfferContextMatches, applyPricingToSnapshot, assertPaymentProviderSupported, resolvePaymentProviderFromSnapshot } from '../utils/booking-snapshot.util';
+import {
+  assertOfferContextMatches,
+  applyPricingToSnapshot,
+  assertPaymentProviderSupported,
+  resolvePaymentProviderFromSnapshot,
+} from '../utils/booking-snapshot.util';
 import { assertPaymentProviderCurrencyCompatible } from 'src/modules/payment/utils/payment-defaults.util';
 import {
   assertBookingStatusAllows,
@@ -92,7 +97,13 @@ export class BookingCheckoutService {
   ): Promise<BookingCheckoutResponseDto> {
     await assertEmailVerifiedForPayment(this.prisma, userId);
 
-    const { seats, offerId: clientOfferId, searchId: clientSearchId, pricingQuoteId, paymentProvider } = dto;
+    const {
+      seats,
+      offerId: clientOfferId,
+      searchId: clientSearchId,
+      pricingQuoteId,
+      paymentProvider,
+    } = dto;
 
     const booking = await this.findBookingForUser(bookingId, userId, {
       travelers: { orderBy: { createdAt: 'asc' } },
@@ -351,10 +362,7 @@ export class BookingCheckoutService {
       transport: EnumTransport.INTERNAL,
     });
 
-    this.bookingMetrics.recordOutboxEnqueued(
-      CHECKOUT_CLEANUP_OUTBOX_TOPIC,
-      EnumTransport.INTERNAL,
-    );
+    this.bookingMetrics.recordOutboxEnqueued(CHECKOUT_CLEANUP_OUTBOX_TOPIC, EnumTransport.INTERNAL);
   }
 
   private async invalidateBookingCache(bookingId: string, userId: string) {
