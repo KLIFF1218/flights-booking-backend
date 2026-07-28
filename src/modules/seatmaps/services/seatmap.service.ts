@@ -96,9 +96,7 @@ export class SeatMapsService {
         return { unavailable: true, seatMaps: [] };
       }
 
-      seatMaps.push(
-        this.buildSegmentSeatMap(instance, context.segmentId, targetCurrency, fxRates),
-      );
+      seatMaps.push(this.buildSegmentSeatMap(instance, context.segmentId, targetCurrency, fxRates));
     }
 
     const result: SeatMapResponseDto = {

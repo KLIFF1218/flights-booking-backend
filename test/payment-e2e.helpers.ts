@@ -91,13 +91,11 @@ export function countPaidOutboxMessages(
 ) {
   return {
     kafka: messages.filter(
-      (message) =>
-        message.topic === 'booking.paid' && message.transport === EnumTransport.KAFKA,
+      (message) => message.topic === 'booking.paid' && message.transport === EnumTransport.KAFKA,
     ).length,
     rabbit: messages.filter(
       (message) =>
-        message.topic.endsWith(':booking.paid') &&
-        message.transport === EnumTransport.RABBITMQ,
+        message.topic.endsWith(':booking.paid') && message.transport === EnumTransport.RABBITMQ,
     ).length,
   };
 }

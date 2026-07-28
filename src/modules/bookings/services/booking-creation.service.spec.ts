@@ -1,6 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { BookingProvider, BookingStatus, EnumTransport, FlightStatus } from '@prisma/client';
+import { BookingStatus, Currency, EnumTransport, FlightStatus } from '@prisma/client';
 import { BookingCreationService } from './booking-creation.service';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { Logger } from 'nestjs-pino';
@@ -54,7 +54,7 @@ describe('BookingCreationService', () => {
     };
     pricingProvider = {
       price: jest.fn().mockResolvedValue({
-        price: { total: '250.00' },
+        price: { total: '250.00', currency: Currency.USD },
         travelers: [{ travelerType: 'ADULT' }],
       }),
     };
@@ -113,12 +113,7 @@ describe('BookingCreationService', () => {
       cb(tx),
     );
 
-    const result = await service.createBooking(
-      'user-1',
-      flightOffer as any,
-      'search-1',
-      'offer-1',
-    );
+    const result = await service.createBooking('user-1', flightOffer as any, 'search-1', 'offer-1');
 
     expect(result.id).toBe('booking-1');
     expect(tx.flightInstance.updateMany).toHaveBeenCalled();

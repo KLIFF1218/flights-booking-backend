@@ -2,7 +2,6 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { OutboxService } from './outbox.service';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { OutboxStatus } from '@prisma/client';
-import { OUTBOX_MAX_ATTEMPTS } from './outbox.constants';
 import { Logger } from 'nestjs-pino';
 import { BookingMetricsService } from 'src/modules/bookings/metrics/booking-metrics.service';
 import { createBookingMetricsMock } from 'src/modules/bookings/metrics/booking-metrics.mock';

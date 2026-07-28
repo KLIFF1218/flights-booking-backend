@@ -373,8 +373,7 @@ export class FlightsService {
         iataCode: flight.arrivalAirport.iataCode,
         city: flight.arrivalAirport.city,
         timezone:
-          flight.arrivalAirport.timezone ||
-          resolveAirportTimezone(flight.arrivalAirport.iataCode),
+          flight.arrivalAirport.timezone || resolveAirportTimezone(flight.arrivalAirport.iataCode),
       },
     }));
   }
@@ -443,8 +442,7 @@ export class FlightsService {
     }
 
     const departureTimezone =
-      flight.departureAirport.timezone ||
-      resolveAirportTimezone(flight.departureAirport.iataCode);
+      flight.departureAirport.timezone || resolveAirportTimezone(flight.departureAirport.iataCode);
 
     const departureDate = zonedTimeToUtc(dto.departureLocalDate, departureTimezone, {
       hour,

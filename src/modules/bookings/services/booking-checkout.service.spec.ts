@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { BookingStatus } from '@prisma/client';
+import { BookingStatus, PaymentProvider } from '@prisma/client';
 import { BookingCheckoutService } from './booking-checkout.service';
 import { type PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { type FlightPricingProvider } from 'src/modules/flights/providers/flight-pricing.provider';
@@ -85,12 +85,13 @@ describe('BookingCheckoutService', () => {
     snapshot: {
       searchId: 'search-1',
       offerId: 'offer-1',
+      paymentProvider: PaymentProvider.YOOKASSA,
       offer: {
         id: 'offer-1',
         itineraries: [{ segments: [{ id: 'seg-1', flightInstanceId: 'fi-1' }] }],
       },
       pricing: {
-        price: { total: 10000 },
+        price: { total: 10000, currency: 'RUB' },
         travelers: [{ travelerId: 'trav-1', travelerType: 'ADULT' }],
       },
     },
@@ -230,7 +231,11 @@ describe('BookingCheckoutService', () => {
     pricingProvider.price.mockResolvedValue(updatedPricing);
     prisma.booking.updateMany.mockResolvedValue({ count: 1 });
     bookingPaymentService.createPayment.mockImplementation(
-      async (_bookingId: string, _userId: string, options?: { afterPaymentPending?: (tx: unknown) => Promise<void> }) => {
+      async (
+        _bookingId: string,
+        _userId: string,
+        options?: { afterPaymentPending?: (tx: unknown) => Promise<void> },
+      ) => {
         if (options?.afterPaymentPending) {
           await options.afterPaymentPending(prisma);
         }
@@ -290,7 +295,11 @@ describe('BookingCheckoutService', () => {
     searchStore.deleteSeatMap.mockResolvedValue(undefined);
     prisma.booking.updateMany.mockResolvedValue({ count: 1 });
     bookingPaymentService.createPayment.mockImplementation(
-      async (_bookingId: string, _userId: string, options?: { afterPaymentPending?: (tx: unknown) => Promise<void> }) => {
+      async (
+        _bookingId: string,
+        _userId: string,
+        options?: { afterPaymentPending?: (tx: unknown) => Promise<void> },
+      ) => {
         if (options?.afterPaymentPending) {
           await options.afterPaymentPending(prisma);
         }
@@ -318,7 +327,7 @@ describe('BookingCheckoutService', () => {
         id: 'booking-1',
         status: { in: [BookingStatus.PNR_CREATED, BookingStatus.SEATS_SELECTED] },
       },
-      data: {
+      data: expect.objectContaining({
         totalPrice: 11200,
         snapshot: expect.objectContaining({
           pricing: updatedPricing,
@@ -329,7 +338,7 @@ describe('BookingCheckoutService', () => {
             }),
           }),
         }),
-      },
+      }),
     });
     expect(outbox.enqueue).toHaveBeenCalledWith(prisma, {
       aggregateId: 'booking-1',
@@ -353,7 +362,9 @@ describe('BookingCheckoutService', () => {
       ...booking,
       totalPrice: 10000,
     });
-    pricingProvider.price.mockResolvedValue({ price: { total: 10500, seats: 500 } });
+    pricingProvider.price.mockResolvedValue({
+      price: { total: 10500, seats: 500, currency: 'RUB' },
+    });
     bookingSeatService.assignSeats.mockResolvedValue(undefined);
     prisma.booking.updateMany.mockResolvedValue({ count: 1 });
     bookingPaymentService.createPayment.mockRejectedValue(new Error('payment failed'));
@@ -394,7 +405,9 @@ describe('BookingCheckoutService', () => {
       ...booking,
       totalPrice: 10000,
     });
-    pricingProvider.price.mockResolvedValue({ price: { total: 10500, seats: 500 } });
+    pricingProvider.price.mockResolvedValue({
+      price: { total: 10500, seats: 500, currency: 'RUB' },
+    });
     bookingSeatService.assignSeats.mockResolvedValue(undefined);
     prisma.booking.updateMany.mockRejectedValue(new Error('pricing update failed'));
     seatReleaseService.revertCheckoutPreparation.mockResolvedValue(undefined);
@@ -422,11 +435,17 @@ describe('BookingCheckoutService', () => {
       ...booking,
       totalPrice: 10000,
     });
-    pricingProvider.price.mockResolvedValue({ price: { total: 10500, seats: 500 } });
+    pricingProvider.price.mockResolvedValue({
+      price: { total: 10500, seats: 500, currency: 'RUB' },
+    });
     bookingSeatService.assignSeats.mockResolvedValue(undefined);
     prisma.booking.updateMany.mockResolvedValue({ count: 1 });
     bookingPaymentService.createPayment.mockImplementation(
-      async (_bookingId: string, _userId: string, options?: { afterPaymentPending?: (tx: unknown) => Promise<void> }) => {
+      async (
+        _bookingId: string,
+        _userId: string,
+        options?: { afterPaymentPending?: (tx: unknown) => Promise<void> },
+      ) => {
         if (options?.afterPaymentPending) {
           await options.afterPaymentPending(prisma);
         }
@@ -529,7 +548,11 @@ describe('BookingCheckoutService', () => {
     });
     prisma.booking.updateMany.mockResolvedValue({ count: 1 });
     bookingPaymentService.createPayment.mockImplementation(
-      async (_bookingId: string, _userId: string, options?: { afterPaymentPending?: (tx: unknown) => Promise<void> }) => {
+      async (
+        _bookingId: string,
+        _userId: string,
+        options?: { afterPaymentPending?: (tx: unknown) => Promise<void> },
+      ) => {
         if (options?.afterPaymentPending) {
           await options.afterPaymentPending(prisma);
         }
@@ -583,7 +606,11 @@ describe('BookingCheckoutService', () => {
     });
     prisma.booking.updateMany.mockResolvedValue({ count: 1 });
     bookingPaymentService.createPayment.mockImplementation(
-      async (_bookingId: string, _userId: string, options?: { afterPaymentPending?: (tx: unknown) => Promise<void> }) => {
+      async (
+        _bookingId: string,
+        _userId: string,
+        options?: { afterPaymentPending?: (tx: unknown) => Promise<void> },
+      ) => {
         if (options?.afterPaymentPending) {
           await options.afterPaymentPending(prisma);
         }

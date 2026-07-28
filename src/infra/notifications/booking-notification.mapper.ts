@@ -125,8 +125,7 @@ export function mapDomainEventToNotification(
         bookingId,
         type: UserNotificationType.FLIGHT_CANCELLED,
         title: 'Flight cancelled',
-        message:
-          'Your flight has been cancelled. Contact support for a refund or rebooking.',
+        message: 'Your flight has been cancelled. Contact support for a refund or rebooking.',
       };
     }
 

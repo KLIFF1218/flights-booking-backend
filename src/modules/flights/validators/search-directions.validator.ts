@@ -59,9 +59,7 @@ export class TodayOrFutureDateConstraint implements ValidatorConstraintInterface
     const direction = args.object as DirectionLike;
     const originTimeZone = resolveAirportTimezone(direction.origin ?? '');
 
-    return (
-      typeof value === 'string' && isTodayOrFutureIsoDate(value, new Date(), originTimeZone)
-    );
+    return typeof value === 'string' && isTodayOrFutureIsoDate(value, new Date(), originTimeZone);
   }
 
   defaultMessage(): string {

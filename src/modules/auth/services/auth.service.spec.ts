@@ -6,7 +6,6 @@ import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from 'nestjs-pino';
-import { verify } from 'argon2';
 import { UsersService } from 'src/modules/users/users.service';
 import { MetricsService } from 'src/infra/metrics/metrics.service';
 import { TokenService } from './token.service';
@@ -20,8 +19,6 @@ jest.mock('argon2', () => ({
   hash: jest.fn(),
   verify: jest.fn(),
 }));
-
-const verifyMock = verify as jest.MockedFunction<typeof verify>;
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -149,7 +146,9 @@ describe('AuthService', () => {
         status: UserStatus.ACTIVE,
       });
       tokenService.issueTokens.mockResolvedValue({ accessToken: 'a', accessMaxAge: 1000 });
-      const emailVerification = (service as any).emailVerification as { sendForUserSafe: jest.Mock };
+      const emailVerification = (service as any).emailVerification as {
+        sendForUserSafe: jest.Mock;
+      };
 
       const result = await service.register(
         { email: 'a@a.com', password: '12345678', firstName: 'Max', lastName: 'Test' },

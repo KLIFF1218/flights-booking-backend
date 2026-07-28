@@ -71,16 +71,16 @@ describe('FlightBookingController', () => {
     bookings.cancel.mockResolvedValue({ id: 'b1', status: 'CANCELED' });
     payment.resumePayment.mockResolvedValue({ paymentUrl: 'url' });
 
-    await expect(controller.getUserBookings('user-1', { page: 1, limit: 20 } as any)).resolves.toEqual(
-      { bookings: [] },
-    );
+    await expect(
+      controller.getUserBookings('user-1', { page: 1, limit: 20 } as any),
+    ).resolves.toEqual({ bookings: [] });
     await expect(controller.getBookingById('b1', 'user-1')).resolves.toEqual({ id: 'b1' });
     await expect(
       controller.addTravelers('b1', 'user-1', { travelers: [] } as any),
     ).resolves.toEqual({ id: 'b1' });
-    await expect(
-      controller.assignSeats('b1', 'user-1', { seats: [] } as any),
-    ).resolves.toEqual({ id: 'b1' });
+    await expect(controller.assignSeats('b1', 'user-1', { seats: [] } as any)).resolves.toEqual({
+      id: 'b1',
+    });
     await expect(
       controller.confirmSeatsAndPay('b1', 'user-1', { searchId: 's', offerId: 'o', seats: [] }),
     ).resolves.toEqual({ paymentUrl: 'url' });

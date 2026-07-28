@@ -4,10 +4,7 @@ import { Kafka, logLevel, type Consumer } from 'kafkajs';
 import { Logger } from 'nestjs-pino';
 import { DomainAnalyticsService } from 'src/infra/analytics/domain-analytics.service';
 import { parseKafkaDomainTopics } from './domain-event.constants';
-import {
-  normalizeDomainEventEnvelope,
-  parseKafkaMessageJson,
-} from './kafka-domain-message.util';
+import { normalizeDomainEventEnvelope, parseKafkaMessageJson } from './kafka-domain-message.util';
 
 @Injectable()
 export class BookingAnalyticsConsumer implements OnModuleInit, OnModuleDestroy {
@@ -21,10 +18,7 @@ export class BookingAnalyticsConsumer implements OnModuleInit, OnModuleDestroy {
     private readonly analytics: DomainAnalyticsService,
   ) {
     const brokers = this.config.get<string>('KAFKA_BROKERS', 'localhost:9092').split(',');
-    this.groupId = this.config.get<string>(
-      'KAFKA_ANALYTICS_CONSUMER_GROUP',
-      'booking-analytics',
-    );
+    this.groupId = this.config.get<string>('KAFKA_ANALYTICS_CONSUMER_GROUP', 'booking-analytics');
 
     this.kafka = new Kafka({
       clientId: `${this.config.get<string>('KAFKA_CLIENT_ID', 'max-airline')}-analytics`,

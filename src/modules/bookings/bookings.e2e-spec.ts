@@ -66,7 +66,12 @@ describe('Bookings — E2E', () => {
   });
 
   it('rejects booking without idempotency key', async () => {
-    const token = await registerVerifiedUser(app, API_V1, prisma, `no-idem-${Date.now()}@test.local`);
+    const token = await registerVerifiedUser(
+      app,
+      API_V1,
+      prisma,
+      `no-idem-${Date.now()}@test.local`,
+    );
     const { searchId, offerId } = await findSearchOffer(app, API_V1);
 
     await request(app.getHttpServer())

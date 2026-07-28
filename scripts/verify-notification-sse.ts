@@ -8,7 +8,19 @@ const TS = Date.now();
 const EMAIL = `sse-verify-${TS}@test.local`;
 const NOISE_WINDOW_MS = 5_000;
 
-async function json(method, path, body, token, headers = {}) {
+type JsonResponse = {
+  ok: boolean;
+  status: number;
+  data: Record<string, unknown>;
+};
+
+async function json(
+  method: string,
+  path: string,
+  body?: unknown,
+  token?: string | null,
+  headers: Record<string, string> = {},
+): Promise<JsonResponse> {
   const res = await fetch(`${API}${path}`, {
     method,
     headers: {
@@ -19,9 +31,9 @@ async function json(method, path, body, token, headers = {}) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const text = await res.text();
-  let data = {};
+  let data: Record<string, unknown> = {};
   try {
-    data = text ? JSON.parse(text) : {};
+    data = text ? (JSON.parse(text) as Record<string, unknown>) : {};
   } catch {
     data = { raw: text };
   }
@@ -43,17 +55,24 @@ async function findSearchOffer() {
       travelClass: 'ECONOMY',
       currencyCode: 'USD',
     });
-    const offer = search.data?.data?.[0];
+    const searchPayload = search.data.data as
+      | Array<{ offerId?: string }>
+      | undefined;
+    const offer = searchPayload?.[0];
     if (offer?.offerId) {
-      return { searchId: search.data.searchId, offerId: offer.offerId, dateFrom };
+      return {
+        searchId: search.data.searchId as string,
+        offerId: offer.offerId,
+        dateFrom,
+      };
     }
   }
   throw new Error('No flight offers — run: docker exec max-airline-app-dev pnpm seed:demo');
 }
 
-async function collectSseEvents(token, durationMs) {
+async function collectSseEvents(token: string, durationMs: number) {
   const controller = new AbortController();
-  const events = [];
+  const events: Record<string, unknown>[] = [];
 
   const streamPromise = (async () => {
     const res = await fetch(`${API}/users/me/notifications/stream`, {
@@ -107,7 +126,7 @@ async function main() {
     lastName: 'Verify',
   });
   if (!reg.ok) throw new Error(`Register failed: ${reg.status} ${JSON.stringify(reg.data)}`);
-  const token = reg.data.accessToken;
+  const token = reg.data.accessToken as string;
 
   console.log('2. Open SSE stream...');
   await sleep(500);
@@ -127,7 +146,7 @@ async function main() {
     { 'Idempotency-Key': `sse-verify-${TS}` },
   );
   if (!book.ok) throw new Error(`Booking failed: ${book.status} ${JSON.stringify(book.data)}`);
-  const bookingId = book.data.id;
+  const bookingId = book.data.id as string;
   console.log(`   Booking: ${bookingId}`);
 
   console.log(`4. Listen ${NOISE_WINDOW_MS / 1000}s — expect no notification.created SSE...`);

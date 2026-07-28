@@ -79,7 +79,11 @@ export class EmailVerificationService {
   }
 
   private async issueAndSend(userId: string, email: string): Promise<void> {
-    const token = await this.emailTokens.issue(userId, EmailTokenPurpose.EMAIL_VERIFY, VERIFY_TTL_MS);
+    const token = await this.emailTokens.issue(
+      userId,
+      EmailTokenPurpose.EMAIL_VERIFY,
+      VERIFY_TTL_MS,
+    );
 
     try {
       await this.authEmail.sendVerification(email, token);

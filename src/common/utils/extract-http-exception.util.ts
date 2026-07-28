@@ -23,8 +23,7 @@ export function extractHttpErrorBody(exception: {
     const rawMessage = body.message;
     const rawError = body.error ?? exception.message;
     const errorCode = typeof body.errorCode === 'string' ? body.errorCode : undefined;
-    const repriceReason =
-      typeof body.repriceReason === 'string' ? body.repriceReason : errorCode;
+    const repriceReason = typeof body.repriceReason === 'string' ? body.repriceReason : errorCode;
 
     const message =
       typeof rawMessage === 'string' ||

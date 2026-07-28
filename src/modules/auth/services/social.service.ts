@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  ServiceUnavailableException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { isAxiosError } from 'axios';
 import { Prisma, Provider } from '@prisma/client';
@@ -244,7 +240,10 @@ export class SocialService {
       runSafely(() => this.metrics.recordLogin('vk'));
       return this.tokenService.issueTokens(user, req, res);
     } catch (error) {
-      if (!(error instanceof UnauthorizedException) && !(error instanceof ServiceUnavailableException)) {
+      if (
+        !(error instanceof UnauthorizedException) &&
+        !(error instanceof ServiceUnavailableException)
+      ) {
         runSafely(() => this.metrics.recordLoginFailure('vk', 'authorization_failed'));
       }
       throw error;

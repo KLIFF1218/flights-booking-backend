@@ -10,10 +10,7 @@ describe('FlightsPricingService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     module = await Test.createTestingModule({
-      providers: [
-        FlightsPricingService,
-        { provide: FLIGHT_PRICING_PROVIDER, useValue: provider },
-      ],
+      providers: [FlightsPricingService, { provide: FLIGHT_PRICING_PROVIDER, useValue: provider }],
     }).compile();
     service = module.get(FlightsPricingService);
   });

@@ -1,4 +1,4 @@
-import { Currency, FareBrand, PassengerType, Prisma, TravelClass } from '@prisma/client';
+import { type Currency, FareBrand, PassengerType, type Prisma, TravelClass } from '@prisma/client';
 import { resolveFareBrandRules } from '../constants/fare-brand.constants';
 
 export const AIRLINES_WITH_FIRST = new Set(['BA', 'LH', 'EK']);

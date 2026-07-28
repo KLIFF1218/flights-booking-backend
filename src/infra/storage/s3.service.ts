@@ -29,8 +29,7 @@ export class S3Service {
   ) {
     const s3Bucket = this.config.getOrThrow<string>('S3_BUCKET');
     const endpoint = this.config.getOrThrow<string>('S3_ENDPOINT');
-    const publicEndpoint =
-      this.config.get<string>('S3_PUBLIC_ENDPOINT')?.trim() || endpoint;
+    const publicEndpoint = this.config.get<string>('S3_PUBLIC_ENDPOINT')?.trim() || endpoint;
 
     const shared: Omit<S3ClientConfig, 'endpoint'> = {
       region: this.config.get<string>('S3_REGION', 'ru-central1'),

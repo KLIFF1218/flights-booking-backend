@@ -207,8 +207,7 @@ export class BookingsService {
     await this.bookingsCache.invalidateBooking(bookingId, booking.userId);
 
     const snapshot = booking.snapshot as unknown as BookingSnapshot | null;
-    const airlineCode =
-      snapshot?.offer?.itineraries?.[0]?.segments?.[0]?.carrierCode ?? 'unknown';
+    const airlineCode = snapshot?.offer?.itineraries?.[0]?.segments?.[0]?.carrierCode ?? 'unknown';
 
     this.bookingMetrics.recordBookingCanceled('user_canceled', booking.status, airlineCode);
 

@@ -4,10 +4,7 @@ import { Kafka, logLevel, type Consumer } from 'kafkajs';
 import { Logger } from 'nestjs-pino';
 import { BookingNotificationsService } from 'src/infra/notifications/booking-notifications.service';
 import { parseKafkaDomainTopics } from './domain-event.constants';
-import {
-  normalizeDomainEventEnvelope,
-  parseKafkaMessageJson,
-} from './kafka-domain-message.util';
+import { normalizeDomainEventEnvelope, parseKafkaMessageJson } from './kafka-domain-message.util';
 
 @Injectable()
 export class BookingNotificationsConsumer implements OnModuleInit, OnModuleDestroy {

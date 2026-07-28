@@ -112,9 +112,7 @@ export class OutboxProcessor {
         await this.ticketingFailedHandler.handle(msg.payload as TicketingFailedOutboxPayload);
         return;
       case BOOKING_CREATE_COMPENSATION_OUTBOX_TOPIC:
-        await this.createCompensationHandler.handle(
-          msg.payload as CreateCompensationOutboxPayload,
-        );
+        await this.createCompensationHandler.handle(msg.payload as CreateCompensationOutboxPayload);
         return;
       default:
         throw new Error(`Unknown internal outbox topic: ${msg.topic}`);

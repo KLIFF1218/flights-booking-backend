@@ -12,7 +12,7 @@ import {
   Length,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty } from '@nestjs/swagger';
 import {
   DistinctAirportsConstraint,
   IataCodeConstraint,
@@ -58,7 +58,8 @@ export class DirectionDto {
 
   @ApiProperty({
     example: '2026-04-01',
-    description: 'Local departure date at the origin airport (YYYY-MM-DD). Round-trip return uses a second direction.',
+    description:
+      'Local departure date at the origin airport (YYYY-MM-DD). Round-trip return uses a second direction.',
   })
   @IsString()
   @Validate(IsoDateConstraint)

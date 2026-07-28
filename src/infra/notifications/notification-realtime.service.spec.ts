@@ -11,11 +11,7 @@ describe('NotificationRealtimeService', () => {
   };
   const logger = { warn: jest.fn() };
 
-  const service = new NotificationRealtimeService(
-    redis as never,
-    config as never,
-    logger as never,
-  );
+  const service = new NotificationRealtimeService(redis as never, config as never, logger as never);
 
   beforeEach(() => {
     jest.clearAllMocks();

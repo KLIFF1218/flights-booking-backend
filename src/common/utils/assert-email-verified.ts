@@ -1,5 +1,5 @@
 import { ForbiddenException } from '@nestjs/common';
-import { PrismaService } from 'src/infra/db/prisma/prisma.service';
+import { type PrismaService } from 'src/infra/db/prisma/prisma.service';
 
 /**
  * Payment gate: checkout requires a verified email on the account.

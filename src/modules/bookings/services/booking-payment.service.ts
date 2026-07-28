@@ -5,7 +5,7 @@ import { Logger } from 'nestjs-pino';
 import { BookingSnapshot } from '../interfaces/booking-snapshot.interface';
 import { resolvePaymentProviderFromSnapshot } from '../utils/booking-snapshot.util';
 import { assertPaymentProviderCurrencyCompatible } from 'src/modules/payment/utils/payment-defaults.util';
-import { BookingStatus, Prisma } from '@prisma/client';
+import { BookingStatus, Currency, Prisma } from '@prisma/client';
 
 @Injectable()
 export class BookingPaymentService {
@@ -88,9 +88,13 @@ export class BookingPaymentService {
   private async createPaymentWithMeta(
     bookingId: string,
     userId: string,
-    booking: { totalPrice: unknown; currency: import('@prisma/client').Currency; snapshot: unknown },
+    booking: {
+      totalPrice: unknown;
+      currency: Currency;
+      snapshot: unknown;
+    },
   ) {
-    const snapshot = booking.snapshot as unknown as BookingSnapshot;
+    const snapshot = booking.snapshot as BookingSnapshot;
     const provider = resolvePaymentProviderFromSnapshot(snapshot);
     assertPaymentProviderCurrencyCompatible(provider, booking.currency);
 

@@ -291,7 +291,8 @@ export class FlightTravelerDto {
 
   @ApiProperty({
     example: 'LIGHT',
-    description: 'Demo fare brand for this traveler (LIGHT/FLEX). Not an airline branded fare code.',
+    description:
+      'Demo fare brand for this traveler (LIGHT/FLEX). Not an airline branded fare code.',
   })
   fareOption!: string;
 

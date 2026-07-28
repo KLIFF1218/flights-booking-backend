@@ -71,9 +71,7 @@ describe('AirportsService', () => {
     prisma.airport.findMany.mockResolvedValue([]);
 
     await service.searchAirports({ q: 'mos' });
-    expect(prisma.airport.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ take: 11 }),
-    );
+    expect(prisma.airport.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 11 }));
 
     await service.searchAirports({ q: 'mos', limit: 999 });
     expect(prisma.airport.findMany).toHaveBeenLastCalledWith(
@@ -129,9 +127,9 @@ describe('AirportsService', () => {
   });
 
   it('rejects malformed cursor tokens', async () => {
-    await expect(
-      service.searchAirports({ q: 'mos', cursor: 'not-valid' }),
-    ).rejects.toThrow(BadRequestException);
+    await expect(service.searchAirports({ q: 'mos', cursor: 'not-valid' })).rejects.toThrow(
+      BadRequestException,
+    );
   });
 
   it('queries prisma with expected select, orderBy and take', async () => {

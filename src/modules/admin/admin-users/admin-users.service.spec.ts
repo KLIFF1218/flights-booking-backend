@@ -1,5 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
-import { TransactionStatus, UserStatus } from '@prisma/client';
+import { UserStatus } from '@prisma/client';
 import { AdminUsersService } from './admin-users.service';
 
 describe('AdminUsersService', () => {

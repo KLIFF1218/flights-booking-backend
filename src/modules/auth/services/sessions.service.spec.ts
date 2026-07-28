@@ -58,7 +58,12 @@ describe('SessionsService', () => {
           ip: '1.1.1.1',
           createdAt: new Date('2026-01-01'),
           expiresAt: new Date('2026-02-01'),
-          userDevice: { id: 'd1', userAgent: 'Chrome', ip: '1.1.1.1', lastSeen: new Date('2026-01-02') },
+          userDevice: {
+            id: 'd1',
+            userAgent: 'Chrome',
+            ip: '1.1.1.1',
+            lastSeen: new Date('2026-01-02'),
+          },
         },
         {
           id: 'rt-2',
@@ -67,7 +72,12 @@ describe('SessionsService', () => {
           ip: '2.2.2.2',
           createdAt: new Date('2026-01-01'),
           expiresAt: new Date('2026-02-01'),
-          userDevice: { id: 'd2', userAgent: 'Firefox', ip: '2.2.2.2', lastSeen: new Date('2026-01-02') },
+          userDevice: {
+            id: 'd2',
+            userAgent: 'Firefox',
+            ip: '2.2.2.2',
+            lastSeen: new Date('2026-01-02'),
+          },
         },
       ]);
     verifyMock.mockResolvedValueOnce(true);

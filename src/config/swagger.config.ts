@@ -55,7 +55,8 @@ export const getSwaggerConfig = (config?: ConfigService) => {
         type: 'http',
         scheme: 'bearer',
         bearerFormat: 'JWT',
-        description: 'Access token from /auth/login, /auth/register, /auth/refresh, or /auth/vk/exchange',
+        description:
+          'Access token from /auth/login, /auth/register, /auth/refresh, or /auth/vk/exchange',
       },
       SWAGGER_BEARER_AUTH,
     )

@@ -22,9 +22,9 @@ describe('assertBookingFlightsStillBookable', () => {
   it('throws when a flight instance is missing', async () => {
     prisma.flightInstance.findMany.mockResolvedValue([]);
 
-    await expect(
-      assertBookingFlightsStillBookable(prisma as any, snapshot),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    await expect(assertBookingFlightsStillBookable(prisma as any, snapshot)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 
   it('throws when flight is cancelled', async () => {
@@ -32,9 +32,9 @@ describe('assertBookingFlightsStillBookable', () => {
       { id: 'fi-1', status: FlightStatus.CANCELLED },
     ]);
 
-    await expect(
-      assertBookingFlightsStillBookable(prisma as any, snapshot),
-    ).rejects.toBeInstanceOf(ConflictException);
+    await expect(assertBookingFlightsStillBookable(prisma as any, snapshot)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
   });
 
   it('passes for scheduled instances', async () => {

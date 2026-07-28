@@ -39,7 +39,9 @@ describe('Payment Webhook — E2E', () => {
   });
 
   it('exposes yookassa webhook health endpoint', async () => {
-    const response = await request(app.getHttpServer()).get(`${API_V1}/webhook/yookassa`).expect(200);
+    const response = await request(app.getHttpServer())
+      .get(`${API_V1}/webhook/yookassa`)
+      .expect(200);
 
     expect(response.body).toEqual({ ok: true });
   });
@@ -65,7 +67,9 @@ describe('Payment Webhook — E2E', () => {
       .expect({ ok: true });
 
     const booking = await prisma.booking.findUniqueOrThrow({ where: { id: bookingId } });
-    const transaction = await prisma.transaction.findUniqueOrThrow({ where: { id: transactionId } });
+    const transaction = await prisma.transaction.findUniqueOrThrow({
+      where: { id: transactionId },
+    });
 
     expect(booking.status).toBe(BookingStatus.PAID);
     expect(transaction.status).toBe(TransactionStatus.SUCCEED);

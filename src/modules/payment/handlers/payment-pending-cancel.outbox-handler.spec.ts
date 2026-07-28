@@ -38,11 +38,13 @@ describe('PaymentPendingCancelOutboxHandler', () => {
       externalId: 'cs_test_1',
     });
 
-    expect(paymentAbandonmentService.cancelPendingPaymentAtProviderBestEffort).toHaveBeenCalledWith({
-      id: 'tx-1',
-      status: TransactionStatus.PENDING,
-      provider: PaymentProvider.STRIPE,
-      externalId: 'cs_test_1',
-    });
+    expect(paymentAbandonmentService.cancelPendingPaymentAtProviderBestEffort).toHaveBeenCalledWith(
+      {
+        id: 'tx-1',
+        status: TransactionStatus.PENDING,
+        provider: PaymentProvider.STRIPE,
+        externalId: 'cs_test_1',
+      },
+    );
   });
 });
