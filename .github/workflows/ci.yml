@@ -21,6 +21,7 @@ permissions:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ghcr.io/${{ github.repository }}
+  DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
 
 jobs:
   quality:
@@ -50,6 +51,9 @@ jobs:
 
       - name: Lint
         run: pnpm lint
+
+      - name: Check formatting
+        run: pnpm format:check
 
       - name: Run tests
         run: pnpm test --passWithNoTests
