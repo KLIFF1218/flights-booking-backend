@@ -2,6 +2,7 @@ import { IsArray, IsString, IsNotEmpty, ValidateNested, IsOptional, IsEnum } fro
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PaymentProvider } from '@prisma/client';
+import { OPENAPI_PAYMENT_PROVIDERS } from 'src/common/swagger/openapi-enums';
 
 export class AssignSeatDto {
   @IsString()
@@ -48,6 +49,8 @@ export class AddSeatsDto {
   @IsEnum(PaymentProvider)
   @ApiPropertyOptional({
     example: PaymentProvider.YOOKASSA,
+    enum: OPENAPI_PAYMENT_PROVIDERS,
+    enumName: 'PaymentProvider',
     description: 'Payment provider override for checkout (must match booking currency)',
   })
   paymentProvider?: PaymentProvider;

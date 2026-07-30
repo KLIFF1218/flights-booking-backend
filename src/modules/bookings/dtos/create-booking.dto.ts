@@ -10,6 +10,7 @@ import {
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PaymentProvider } from '@prisma/client';
+import { OPENAPI_PAYMENT_PROVIDERS } from 'src/common/swagger/openapi-enums';
 import type { FlightOrderData } from './flight-order-booking-response.type';
 import { TravelerInputDto } from './traveler.input.dto';
 
@@ -27,7 +28,11 @@ export class CreateBookingDto {
   flightOrder!: FlightOrderData;
 
   @IsEnum(PaymentProvider)
-  @ApiProperty({ example: 'YOOKASSA' })
+  @ApiProperty({
+    example: 'YOOKASSA',
+    enum: OPENAPI_PAYMENT_PROVIDERS,
+    enumName: 'PaymentProvider',
+  })
   paymentProvider!: PaymentProvider;
 
   @IsArray()

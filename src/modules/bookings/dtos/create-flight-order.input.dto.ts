@@ -13,6 +13,7 @@ import {
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PaymentProvider } from '@prisma/client';
+import { OPENAPI_PAYMENT_PROVIDERS } from 'src/common/swagger/openapi-enums';
 
 export enum DocumentType {
   PASSPORT = 'PASSPORT',
@@ -154,7 +155,8 @@ export class CreateFlightOrderInputDto {
   @IsEnum(PaymentProvider)
   @ApiPropertyOptional({
     example: 'STRIPE',
-    enum: PaymentProvider,
+    enum: OPENAPI_PAYMENT_PROVIDERS,
+    enumName: 'PaymentProvider',
     description: 'Payment method (defaults if not specified)',
   })
   paymentProvider?: PaymentProvider;
