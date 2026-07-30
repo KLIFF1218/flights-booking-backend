@@ -17,8 +17,7 @@ import { RabbitmqShutdownService } from './rabbitmq-shutdown.service';
         const explicitWait = config.get<string>('RABBITMQ_CONNECTION_WAIT');
         const waitForConnection =
           explicitWait === 'true' ||
-          (explicitWait !== 'false' &&
-            config.getOrThrow<string>('NODE_ENV') === 'production');
+          (explicitWait !== 'false' && config.getOrThrow<string>('NODE_ENV') === 'production');
 
         return {
           uri: config.getOrThrow<string>('RABBITMQ_URI'),

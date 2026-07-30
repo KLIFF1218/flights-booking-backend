@@ -23,10 +23,7 @@ import fs from 'fs';
 import path from 'path';
 import type { Server } from 'http';
 
-function writeSwaggerJsonFile(
-  logger: Logger,
-  document: OpenAPIObject,
-): void {
+function writeSwaggerJsonFile(logger: Logger, document: OpenAPIObject): void {
   const outPath = path.join(process.cwd(), 'swagger.json');
 
   try {
@@ -34,7 +31,7 @@ function writeSwaggerJsonFile(
     logger.log({ path: outPath }, 'Wrote Swagger JSON to disk');
   } catch (writeErr) {
     logger.warn(
-      { err: writeErr },
+      { err: writeErr instanceof Error ? writeErr : String(writeErr) },
       'Could not write swagger.json; Swagger UI at /docs is still available',
     );
   }
@@ -123,7 +120,10 @@ async function bootstrap(): Promise<void> {
         'Swagger UI enabled at /docs (legacy /api/docs redirects here)',
       );
     } catch (err) {
-      logger.error({ err }, 'Failed to initialize Swagger');
+      logger.error(
+        { err: err instanceof Error ? err : String(err) },
+        'Failed to initialize Swagger',
+      );
     }
   }
 

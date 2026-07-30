@@ -7,6 +7,5 @@ export default registerAs('rabbitmq', () => ({
   deadLetterExchange: process.env.RABBITMQ_DLX!,
   connectionWait:
     process.env.RABBITMQ_CONNECTION_WAIT === 'true' ||
-    (process.env.RABBITMQ_CONNECTION_WAIT !== 'false' &&
-      process.env.NODE_ENV === 'production'),
+    (process.env.RABBITMQ_CONNECTION_WAIT !== 'false' && process.env.NODE_ENV === 'production'),
 }));
