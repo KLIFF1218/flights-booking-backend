@@ -6,9 +6,12 @@ import { Logger } from 'nestjs-pino';
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   constructor(private readonly logger: Logger) {
+    const connectionTimeoutMillis =
+      process.env.NODE_ENV === 'development' ? 10000 : 5000;
+
     const adapter = new PrismaPg({
       connectionString: process.env.DATABASE_URL,
-      connectionTimeoutMillis: 5000,
+      connectionTimeoutMillis,
       idleTimeoutMillis: 300000,
     });
 
