@@ -1,4 +1,4 @@
-
+# Dependencies (reinstalled inside the image)
 node_modules
 .pnpm-store
 .npm
@@ -8,14 +8,16 @@ node_modules
 .pnpm-debug.log
 npm-debug.log
 
-
+# Build & test artifacts
 dist
 build
 coverage
 .tmp
 .cache
+swagger.json
+src/metadata.ts
 
-
+# Environment & secrets
 .env
 .env.*
 *.pem
@@ -23,12 +25,13 @@ coverage
 *.crt
 *.pfx
 
-
+# Git & CI
 .git
 .gitignore
 .gitattributes
+.github
 
-
+# IDE & OS
 .vscode
 .idea
 *.swp
@@ -36,7 +39,7 @@ coverage
 .DS_Store
 Thumbs.db
 
-
+# Tests (not needed in the image; rebuilt in CI if required)
 test
 tests
 __tests__
@@ -45,11 +48,22 @@ __tests__
 jest.config.*
 vitest.config.*
 
-
+# Logs
 logs
 *.log
 
+# Docs & local dev tooling
+*.md
+docs
+.prettierrc
+eslint.config.mjs
 
+# Observability configs (mounted separately in compose, not baked into app image)
+grafana
+prometheus.yml
+prometheus.production.yml
+
+# Docker meta (not needed inside the image)
 docker-compose.yml
 docker-compose.*.yml
 Dockerfile

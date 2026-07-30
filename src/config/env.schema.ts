@@ -31,6 +31,7 @@ const envSchema = z
     RABBITMQ_EXCHANGE: z.string().min(1, 'RABBITMQ_EXCHANGE is required'),
     RABBITMQ_QUEUE: z.string().min(1, 'RABBITMQ_QUEUE is required'),
     RABBITMQ_DLX: z.string().min(1, 'RABBITMQ_DLX is required'),
+    RABBITMQ_CONNECTION_WAIT: booleanString.optional(),
 
     KAFKA_BROKERS: z.string().default('localhost:9092'),
     KAFKA_CLIENT_ID: z.string().default('max-airline'),

@@ -46,6 +46,7 @@ services:
       REDIS_PORT: 6379
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       RABBITMQ_URI: amqp://${RABBITMQ_USER:-admin}:${RABBITMQ_PASSWORD:-admin}@rabbitmq:5672
+      RABBITMQ_CONNECTION_WAIT: 'false'
       KAFKA_BROKERS: redpanda:9092
       KAFKA_AUDIT_CONSUMER_GROUP: booking-audit
       KAFKA_NOTIFICATIONS_CONSUMER_GROUP: booking-notifications

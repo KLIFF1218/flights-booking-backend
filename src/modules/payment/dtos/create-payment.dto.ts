@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { type Currency, type PaymentProvider } from '@prisma/client';
+import { type Currency, PaymentProvider } from '@prisma/client';
+import { OPENAPI_PAYMENT_PROVIDERS } from 'src/common/swagger/openapi-enums';
 
 export class PassengersDto {
   @ApiProperty({ example: 1, minimum: 1 })
@@ -27,7 +28,11 @@ export class CreatePaymentDto {
   @ApiProperty({ example: 'clbooking0123456789' })
   bookingId!: string;
 
-  @ApiProperty({ example: 'STRIPE' })
+  @ApiProperty({
+    example: 'STRIPE',
+    enum: OPENAPI_PAYMENT_PROVIDERS,
+    enumName: 'PaymentProvider',
+  })
   provider!: PaymentProvider;
 
   @ApiProperty({ example: 'cluser0123456789' })

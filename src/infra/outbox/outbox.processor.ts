@@ -57,44 +57,48 @@ export class OutboxProcessor {
 
   @Cron('*/5 * * * * *')
   async handle() {
-    await this.outbox.reclaimStaleProcessing();
+    try {
+      await this.outbox.reclaimStaleProcessing();
 
-    const pending = await this.outbox.fetchPending(50);
-    if (pending.length === 0) return;
-    this.logger.debug(`Outbox processing ${pending.length} messages`);
-    for (const msg of pending) {
-      try {
-        const claimed = await this.outbox.tryMarkProcessing(msg.id);
-        if (!claimed) {
-          continue;
+      const pending = await this.outbox.fetchPending(50);
+      if (pending.length === 0) return;
+      this.logger.debug(`Outbox processing ${pending.length} messages`);
+      for (const msg of pending) {
+        try {
+          const claimed = await this.outbox.tryMarkProcessing(msg.id);
+          if (!claimed) {
+            continue;
+          }
+
+          if (msg.transport === EnumTransport.INTERNAL) {
+            await this.handleInternalMessage(msg);
+          } else if (msg.transport === EnumTransport.KAFKA) {
+            const message = isKafkaDomainTopic(msg.topic)
+              ? buildDomainEventEnvelope(msg)
+              : msg.payload;
+            const partitionKey = isKafkaDomainTopic(msg.topic)
+              ? resolveDomainEventPartitionKey(msg)
+              : (msg.key ?? undefined);
+
+            await this.kafka.publish(msg.topic, message, partitionKey);
+          } else if (msg.transport === EnumTransport.RABBITMQ) {
+            const { exchange, routingKey } = parseRabbitRouting(msg.topic);
+            await this.rabbit.publishRaw(exchange, routingKey, msg.payload);
+          } else {
+            throw new Error(`Unsupported outbox transport: ${String(msg.transport)}`);
+          }
+
+          await this.outbox.markSent(msg.id);
+          if (isBookingOutboxTopic(msg.topic)) {
+            this.bookingMetrics.recordOutboxSent(msg.topic, msg.transport);
+          }
+          this.logOutboxSent(msg);
+        } catch (err) {
+          await this.outbox.scheduleRetry(msg.id, err);
         }
-
-        if (msg.transport === EnumTransport.INTERNAL) {
-          await this.handleInternalMessage(msg);
-        } else if (msg.transport === EnumTransport.KAFKA) {
-          const message = isKafkaDomainTopic(msg.topic)
-            ? buildDomainEventEnvelope(msg)
-            : msg.payload;
-          const partitionKey = isKafkaDomainTopic(msg.topic)
-            ? resolveDomainEventPartitionKey(msg)
-            : (msg.key ?? undefined);
-
-          await this.kafka.publish(msg.topic, message, partitionKey);
-        } else if (msg.transport === EnumTransport.RABBITMQ) {
-          const { exchange, routingKey } = parseRabbitRouting(msg.topic);
-          await this.rabbit.publishRaw(exchange, routingKey, msg.payload);
-        } else {
-          throw new Error(`Unsupported outbox transport: ${String(msg.transport)}`);
-        }
-
-        await this.outbox.markSent(msg.id);
-        if (isBookingOutboxTopic(msg.topic)) {
-          this.bookingMetrics.recordOutboxSent(msg.topic, msg.transport);
-        }
-        this.logOutboxSent(msg);
-      } catch (err) {
-        await this.outbox.scheduleRetry(msg.id, err);
       }
+    } catch (error) {
+      this.logger.error(error, 'Outbox processing failed');
     }
   }
 

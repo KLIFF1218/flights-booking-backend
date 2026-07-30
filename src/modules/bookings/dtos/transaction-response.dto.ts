@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Currency, PaymentProvider, TransactionStatus } from '@prisma/client';
+import { OPENAPI_PAYMENT_PROVIDERS } from 'src/common/swagger/openapi-enums';
 
 export class TransactionResponseDto {
   @ApiProperty({
@@ -14,7 +15,11 @@ export class TransactionResponseDto {
   @ApiProperty({ enum: Object.values(Currency), example: Currency.USD })
   currency!: Currency;
 
-  @ApiProperty({ enum: Object.values(PaymentProvider), example: PaymentProvider.STRIPE })
+  @ApiProperty({
+    enum: OPENAPI_PAYMENT_PROVIDERS,
+    enumName: 'PaymentProvider',
+    example: PaymentProvider.STRIPE,
+  })
   provider!: PaymentProvider;
 
   @ApiProperty({ enum: Object.values(TransactionStatus), example: TransactionStatus.SUCCEED })

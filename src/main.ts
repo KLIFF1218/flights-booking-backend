@@ -7,9 +7,10 @@ import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
 import { Logger as NestLogger, VersioningType } from '@nestjs/common';
 import { Logger } from 'nestjs-pino';
-import { SwaggerModule } from '@nestjs/swagger';
+import { SwaggerModule, type OpenAPIObject } from '@nestjs/swagger';
 import helmet from 'helmet';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import type { Response } from 'express';
 
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { requestIdMiddleware } from './common/middleware/request-id.middleware';
@@ -21,6 +22,30 @@ import { assertJwtSecretsForProduction } from './config/jwt-secrets';
 import fs from 'fs';
 import path from 'path';
 import type { Server } from 'http';
+
+function writeSwaggerJsonFile(logger: Logger, document: OpenAPIObject): void {
+  const outPath = path.join(process.cwd(), 'swagger.json');
+
+  try {
+    fs.writeFileSync(outPath, JSON.stringify(document, null, 2), 'utf8');
+    logger.log({ path: outPath }, 'Wrote Swagger JSON to disk');
+  } catch (writeErr) {
+    logger.warn(
+      { err: writeErr instanceof Error ? writeErr : String(writeErr) },
+      'Could not write swagger.json; Swagger UI at /docs is still available',
+    );
+  }
+}
+
+function mountSwaggerDocsRedirects(app: NestExpressApplication): void {
+  const httpAdapter = app.getHttpAdapter();
+
+  for (const legacyPath of ['/api/docs', '/api/v1/docs']) {
+    httpAdapter.get(legacyPath, (_req, res: Response) => {
+      res.redirect(302, '/docs');
+    });
+  }
+}
 
 startTelemetry();
 
@@ -49,8 +74,21 @@ async function bootstrap(): Promise<void> {
   dns.setDefaultResultOrder('ipv4first');
 
   app.set('trust proxy', 1);
+  app.use(
+    env === 'development'
+      ? helmet({
+          contentSecurityPolicy: {
+            directives: {
+              ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+              'script-src': ["'self'", "'unsafe-inline'"],
+              'style-src': ["'self'", "'unsafe-inline'"],
+            },
+          },
+        })
+      : helmet(),
+  );
+
   app.use(cookieParser());
-  app.use(helmet());
 
   app.enableCors(getCorsConfig(config));
 
@@ -66,20 +104,26 @@ async function bootstrap(): Promise<void> {
 
     try {
       const document = SwaggerModule.createDocument(app, swaggerConfig);
-      const outPath = path.join(process.cwd(), 'swagger.json');
-      fs.writeFileSync(outPath, JSON.stringify(document, null, 2), 'utf8');
-      logger.log({ path: outPath }, 'Wrote Swagger JSON to disk');
+      writeSwaggerJsonFile(logger, document);
 
-      SwaggerModule.setup('/docs', app, document, {
+      SwaggerModule.setup('docs', app, document, {
         jsonDocumentUrl: 'openapi.json',
         swaggerOptions: {
           persistAuthorization: true,
         },
       });
 
-      logger.log('Swagger enabled at /docs');
+      mountSwaggerDocsRedirects(app);
+
+      logger.log(
+        { url: `http://localhost:${port}/docs` },
+        'Swagger UI enabled at /docs (legacy /api/docs redirects here)',
+      );
     } catch (err) {
-      logger.error('Failed to write swagger.json', err as Error);
+      logger.error(
+        { err: err instanceof Error ? err : String(err) },
+        'Failed to initialize Swagger',
+      );
     }
   }
 

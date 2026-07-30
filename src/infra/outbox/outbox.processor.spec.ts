@@ -49,7 +49,10 @@ describe('OutboxProcessor', () => {
         { provide: OutboxService, useValue: outbox },
         { provide: KafkaPublisher, useValue: kafka },
         { provide: BookingEventsPublisher, useValue: rabbit },
-        { provide: Logger, useValue: { debug: jest.fn(), warn: jest.fn() } },
+        {
+          provide: Logger,
+          useValue: { debug: jest.fn(), warn: jest.fn(), error: jest.fn() },
+        },
         {
           provide: PaymentPendingCancelOutboxHandler,
           useValue: paymentPendingCancelHandler,
@@ -165,6 +168,38 @@ describe('OutboxProcessor', () => {
 
     expect(checkoutCleanupHandler.handle).not.toHaveBeenCalled();
     expect(outbox.markSent).not.toHaveBeenCalled();
+  });
+
+  it('logs and swallows errors when reclaim or fetch fails', async () => {
+    const logger = { debug: jest.fn(), warn: jest.fn(), error: jest.fn() };
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        OutboxProcessor,
+        { provide: OutboxService, useValue: outbox },
+        { provide: KafkaPublisher, useValue: kafka },
+        { provide: BookingEventsPublisher, useValue: rabbit },
+        { provide: Logger, useValue: logger },
+        {
+          provide: PaymentPendingCancelOutboxHandler,
+          useValue: paymentPendingCancelHandler,
+        },
+        { provide: CheckoutCleanupOutboxHandler, useValue: checkoutCleanupHandler },
+        { provide: TicketingFailedOutboxHandler, useValue: ticketingFailedHandler },
+        {
+          provide: CreateCompensationOutboxHandler,
+          useValue: createCompensationHandler,
+        },
+        { provide: BookingMetricsService, useValue: createBookingMetricsMock() },
+      ],
+    }).compile();
+    const failingProcessor = module.get(OutboxProcessor);
+    const dbError = new Error('connection timeout');
+    outbox.reclaimStaleProcessing.mockRejectedValue(dbError);
+
+    await failingProcessor.handle();
+
+    expect(logger.error).toHaveBeenCalledWith(dbError, 'Outbox processing failed');
+    expect(outbox.fetchPending).not.toHaveBeenCalled();
   });
 
   it('schedules retry when publishing fails', async () => {
