@@ -13,23 +13,31 @@ import { RabbitmqShutdownService } from './rabbitmq-shutdown.service';
     RabbitMQModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        uri: config.getOrThrow<string>('RABBITMQ_URI'),
+      useFactory: (config: ConfigService) => {
+        const explicitWait = config.get<string>('RABBITMQ_CONNECTION_WAIT');
+        const waitForConnection =
+          explicitWait === 'true' ||
+          (explicitWait !== 'false' &&
+            config.getOrThrow<string>('NODE_ENV') === 'production');
 
-        exchanges: [
-          {
-            name: config.getOrThrow<string>('RABBITMQ_EXCHANGE'),
-            type: 'topic',
-            durable: true,
+        return {
+          uri: config.getOrThrow<string>('RABBITMQ_URI'),
+
+          exchanges: [
+            {
+              name: config.getOrThrow<string>('RABBITMQ_EXCHANGE'),
+              type: 'topic',
+              durable: true,
+            },
+          ],
+
+          connectionInitOptions: {
+            wait: waitForConnection,
           },
-        ],
 
-        connectionInitOptions: {
-          wait: false,
-        },
-
-        enableDirectReplyTo: false,
-      }),
+          enableDirectReplyTo: false,
+        };
+      },
     }),
   ],
   providers: [BookingEventsPublisher, BookingEventsConsumer, RabbitmqShutdownService],
