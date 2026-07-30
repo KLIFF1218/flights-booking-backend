@@ -32,16 +32,13 @@
     "seed:full": "ts-node -r tsconfig-paths/register scripts/seeds/full.seed.ts",
     "seed:flights": "ts-node -r tsconfig-paths/register scripts/seeds/flights.seed.ts",
     "seed:instances": "ts-node -r tsconfig-paths/register scripts/seeds/flights-instances.seed.ts",
-    "seed:aircraft-layouts": "ts-node -r tsconfig-paths/register scripts/seeds/aircrafts-layouts.seed.ts",
     "seed:refresh-layouts": "ts-node -r tsconfig-paths/register scripts/seeds/refresh-aircraft-layouts.seed.ts",
+    "seed:aircraft-layouts": "pnpm seed:refresh-layouts",
     "seed:seat-templates": "ts-node -r tsconfig-paths/register scripts/seeds/seat-templates.seed.ts",
-    "seed:facility-templates": "ts-node -r tsconfig-paths/register scripts/seeds/facility-templates.seed.ts",
     "seed:cleanup-facilities": "ts-node -r tsconfig-paths/register scripts/seeds/cleanup-facilities.seed.ts",
-    "seed:infant-fares": "ts-node -r tsconfig-paths/register scripts/seeds/infant-fares-backfill.seed.ts",
     "kafka:create-topics": "ts-node scripts/kafka-create-topics.ts",
     "analytics:rebuild": "ts-node -r tsconfig-paths/register scripts/rebuild-analytics.ts",
-    "verify:kafka": "bash scripts/verify-kafka-events.sh",
-    "kafka:consume": "ts-node scripts/kafka-consumer.ts"
+    "verify:kafka": "bash scripts/verify-kafka-events.sh"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.978.0",
