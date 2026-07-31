@@ -72,12 +72,6 @@ import { redisConfig } from './config/redis.config';
     OutboxModule,
     LifecycleModule,
 
-    // PrometheusModule.register({
-    //   path: '/metrics',
-    //   defaultMetrics: {
-    //     enabled: true,
-    //   },
-    // }),
     MetricsModule,
 
     BullModule.forRootAsync({
