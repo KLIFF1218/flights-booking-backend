@@ -3,7 +3,7 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { TravelClass } from '@prisma/client';
 import { DbFlightsSearchProvider } from './db-flight-search.service';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
-import { buildAirport, buildMockFlightInstance } from '../tests/flights-test.fixtures';
+import { buildAirport, buildMockFlightInstance } from '../flights-test.fixtures';
 
 describe('DbFlightsSearchProvider', () => {
   let service: DbFlightsSearchProvider;

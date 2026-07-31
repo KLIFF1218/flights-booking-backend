@@ -6,9 +6,9 @@ import {
   Prisma,
   TravelClass,
 } from '@prisma/client';
-import type { FlightOffer } from '../interfaces/flight-offers.interface';
-import type { FlightInstanceWithRelations } from '../providers/prisma/flight-instance.type';
-import { OFFER_SOURCE_INTERNAL_DB } from '../constants/fare-brand.constants';
+import type { FlightOffer } from './interfaces/flight-offers.interface';
+import type { FlightInstanceWithRelations } from './providers/prisma/flight-instance.type';
+import { OFFER_SOURCE_INTERNAL_DB } from './constants/fare-brand.constants';
 
 export function buildAirport(iataCode: string, timezone: string, country = 'US') {
   return {

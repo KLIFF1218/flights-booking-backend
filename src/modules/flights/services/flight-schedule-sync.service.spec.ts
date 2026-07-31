@@ -4,7 +4,7 @@ import { Logger } from 'nestjs-pino';
 import { FlightScheduleSyncService } from './flight-schedule-sync.service';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { FlightsSearchStore } from './flights-cache.service';
-import { buildCachedPricingOffer, buildMockFlightInstance } from '../tests/flights-test.fixtures';
+import { buildCachedPricingOffer, buildMockFlightInstance } from '../flights-test.fixtures';
 
 describe('FlightScheduleSyncService', () => {
   let service: FlightScheduleSyncService;

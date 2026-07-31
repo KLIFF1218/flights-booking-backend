@@ -1,5 +1,5 @@
 import { Test, type TestingModule } from '@nestjs/testing';
-import { FlightsSearchStore } from '../services/flights-cache.service';
+import { FlightsSearchStore } from './flights-cache.service';
 import { RedisService } from 'src/infra/redis/redis.service';
 
 describe('FlightsSearchStore', () => {

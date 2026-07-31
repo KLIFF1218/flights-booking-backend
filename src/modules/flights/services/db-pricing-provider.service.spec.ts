@@ -7,7 +7,7 @@ import { FlightsSearchStore } from './flights-cache.service';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { CalculateSeatPrice } from './calculate-seatprice.service';
 import { CurrencyRatesService } from './currency-rates.service';
-import { buildCachedPricingOffer, buildMockFlightInstance } from '../tests/flights-test.fixtures';
+import { buildCachedPricingOffer, buildMockFlightInstance } from '../flights-test.fixtures';
 
 describe('DbPricingProvider', () => {
   let service: DbPricingProvider;
