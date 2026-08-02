@@ -2,8 +2,7 @@ import { BookingStatus, PaymentProvider, TransactionStatus } from '@prisma/clien
 import { PaymentAbandonmentService } from './payment-abandonment.service';
 import { type PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { type PaymentProviderService } from './payment-provider.service';
-import { type SeatReleaseService } from '../../bookings/services/seat-release.service';
-import { type BookingsCacheService } from '../../bookings/services/bookings-cache.service';
+import { type BookingPaymentLifecycleService } from '../../bookings/services/booking-payment-lifecycle.service';
 import { type Logger } from 'nestjs-pino';
 import { createBookingMetricsMock } from '../../bookings/metrics/booking-metrics.mock';
 
@@ -23,13 +22,13 @@ describe('PaymentAbandonmentService', () => {
   };
   const paymentProviderService = {
     cancelPendingPayment: jest.fn(),
+    cancelPendingPaymentBestEffort: jest.fn(),
     refundSucceededPayment: jest.fn(),
   };
-  const seatReleaseService = {
-    releaseSeatsForBooking: jest.fn(),
-  };
-  const bookingsCache = {
+  const bookingPaymentLifecycle = {
+    expireUnpaidPaymentPending: jest.fn(),
     invalidateBooking: jest.fn(),
+    releaseSeatsAndInventoryForTicketingFailure: jest.fn(),
   };
   const logger = {
     log: jest.fn(),
@@ -42,12 +41,11 @@ describe('PaymentAbandonmentService', () => {
     prisma.booking.findMany.mockReset();
     prisma.booking.findUnique.mockReset();
     prisma.$transaction.mockReset();
-    paymentProviderService.cancelPendingPayment.mockReset();
+    paymentProviderService.cancelPendingPaymentBestEffort.mockReset();
     service = new PaymentAbandonmentService(
       prisma as unknown as PrismaService,
       paymentProviderService as unknown as PaymentProviderService,
-      seatReleaseService as unknown as SeatReleaseService,
-      bookingsCache as unknown as BookingsCacheService,
+      bookingPaymentLifecycle as unknown as BookingPaymentLifecycleService,
       logger as unknown as Logger,
       createBookingMetricsMock(),
       {
@@ -100,37 +98,28 @@ describe('PaymentAbandonmentService', () => {
 
     prisma.$transaction.mockImplementation(async (callback) =>
       callback({
-        booking: {
-          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
-        },
         transaction: {
           updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         },
-        traveler: {
-          count: jest.fn().mockResolvedValue(0),
-        },
-        flightInstance: {
-          findUnique: jest.fn().mockResolvedValue({
-            seatsAvailable: 10,
-            _count: { seats: 100 },
-          }),
-          update: jest.fn(),
-        },
       }),
     );
+    bookingPaymentLifecycle.expireUnpaidPaymentPending.mockResolvedValue(true);
 
     await expect(service.expireStalePayments(now)).resolves.toBe(1);
 
-    expect(paymentProviderService.cancelPendingPayment).toHaveBeenCalledWith(
+    expect(paymentProviderService.cancelPendingPaymentBestEffort).toHaveBeenCalledWith(
       PaymentProvider.STRIPE,
       'cs_test_1',
+      { transactionId: 'tx-1' },
     );
-    expect(seatReleaseService.releaseSeatsForBooking).toHaveBeenCalledWith(
-      'booking-1',
+    expect(bookingPaymentLifecycle.expireUnpaidPaymentPending).toHaveBeenCalledWith(
       expect.any(Object),
-      'payment_abandoned',
+      'booking-1',
+      expect.objectContaining({
+        offer: expect.any(Object),
+      }),
     );
-    expect(bookingsCache.invalidateBooking).toHaveBeenCalledWith('booking-1', 'user-1');
+    expect(bookingPaymentLifecycle.invalidateBooking).toHaveBeenCalledWith('booking-1', 'user-1');
   });
 
   it('does not abandon when payment was finalized before CAS', async () => {
@@ -165,9 +154,9 @@ describe('PaymentAbandonmentService', () => {
 
     await expect(service.abandonPayment('booking-1')).resolves.toBe(false);
 
-    expect(paymentProviderService.cancelPendingPayment).not.toHaveBeenCalled();
-    expect(seatReleaseService.releaseSeatsForBooking).not.toHaveBeenCalled();
-    expect(bookingsCache.invalidateBooking).not.toHaveBeenCalled();
+    expect(paymentProviderService.cancelPendingPaymentBestEffort).not.toHaveBeenCalled();
+    expect(bookingPaymentLifecycle.expireUnpaidPaymentPending).not.toHaveBeenCalled();
+    expect(bookingPaymentLifecycle.invalidateBooking).not.toHaveBeenCalled();
   });
 
   it('does not abandon when transaction is no longer pending', async () => {
@@ -185,7 +174,7 @@ describe('PaymentAbandonmentService', () => {
 
     await expect(service.abandonPayment('booking-1')).resolves.toBe(false);
 
-    expect(paymentProviderService.cancelPendingPayment).not.toHaveBeenCalled();
+    expect(paymentProviderService.cancelPendingPaymentBestEffort).not.toHaveBeenCalled();
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
@@ -224,16 +213,6 @@ describe('PaymentAbandonmentService', () => {
     function mockCompensationTransaction(): void {
       prisma.$transaction.mockImplementation(async (callback) =>
         callback({
-          traveler: {
-            count: jest.fn().mockResolvedValue(1),
-          },
-          flightInstance: {
-            findUnique: jest.fn().mockResolvedValue({
-              seatsAvailable: 10,
-              _count: { seats: 100 },
-            }),
-            update: jest.fn(),
-          },
           transaction: {
             findUnique: jest.fn().mockResolvedValue({ providerMeta: {} }),
             update: jest.fn(),
@@ -241,6 +220,9 @@ describe('PaymentAbandonmentService', () => {
         }),
       );
       prisma.transaction.update.mockResolvedValue({});
+      bookingPaymentLifecycle.releaseSeatsAndInventoryForTicketingFailure.mockResolvedValue(
+        undefined,
+      );
     }
 
     it('refunds before releasing seats and marks compensation complete', async () => {
@@ -255,12 +237,12 @@ describe('PaymentAbandonmentService', () => {
         'pi_test_1',
         'ticketing-fail-refund-tx-1',
       );
-      expect(seatReleaseService.releaseSeatsForBooking).toHaveBeenCalledWith(
-        'booking-1',
+      expect(bookingPaymentLifecycle.releaseSeatsAndInventoryForTicketingFailure).toHaveBeenCalledWith(
         expect.any(Object),
-        'ticketing_failed',
+        'booking-1',
+        bookingSnapshot,
       );
-      expect(bookingsCache.invalidateBooking).toHaveBeenCalledWith('booking-1', 'user-1');
+      expect(bookingPaymentLifecycle.invalidateBooking).toHaveBeenCalledWith('booking-1', 'user-1');
     });
 
     it('does not release seats when refund fails', async () => {
@@ -271,9 +253,9 @@ describe('PaymentAbandonmentService', () => {
         service.compensateTicketingFailure('booking-1', 'PRICING_NOT_FOUND'),
       ).rejects.toThrow('stripe down');
 
-      expect(seatReleaseService.releaseSeatsForBooking).not.toHaveBeenCalled();
+      expect(bookingPaymentLifecycle.releaseSeatsAndInventoryForTicketingFailure).not.toHaveBeenCalled();
       expect(prisma.$transaction).not.toHaveBeenCalled();
-      expect(bookingsCache.invalidateBooking).not.toHaveBeenCalled();
+      expect(bookingPaymentLifecycle.invalidateBooking).not.toHaveBeenCalled();
     });
 
     it('skips refund and release when compensation was already completed', async () => {
@@ -287,7 +269,7 @@ describe('PaymentAbandonmentService', () => {
       await service.compensateTicketingFailure('booking-1', 'PRICING_NOT_FOUND');
 
       expect(paymentProviderService.refundSucceededPayment).not.toHaveBeenCalled();
-      expect(seatReleaseService.releaseSeatsForBooking).not.toHaveBeenCalled();
+      expect(bookingPaymentLifecycle.releaseSeatsAndInventoryForTicketingFailure).not.toHaveBeenCalled();
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
@@ -300,7 +282,7 @@ describe('PaymentAbandonmentService', () => {
       await service.compensateTicketingFailure('booking-1', 'PRICING_NOT_FOUND');
 
       expect(paymentProviderService.refundSucceededPayment).not.toHaveBeenCalled();
-      expect(seatReleaseService.releaseSeatsForBooking).toHaveBeenCalled();
+      expect(bookingPaymentLifecycle.releaseSeatsAndInventoryForTicketingFailure).toHaveBeenCalled();
     });
 
     it('fails when paid transaction has no external id', async () => {
@@ -317,7 +299,7 @@ describe('PaymentAbandonmentService', () => {
       ).rejects.toThrow('Ticketing failure refund requires payment external id');
 
       expect(paymentProviderService.refundSucceededPayment).not.toHaveBeenCalled();
-      expect(seatReleaseService.releaseSeatsForBooking).not.toHaveBeenCalled();
+      expect(bookingPaymentLifecycle.releaseSeatsAndInventoryForTicketingFailure).not.toHaveBeenCalled();
     });
   });
 });

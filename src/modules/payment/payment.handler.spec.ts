@@ -9,7 +9,15 @@ import { IdempotencyService } from './services/idempotency.service';
 import { SeatReleaseService } from '../bookings/services/seat-release.service';
 import { BookingsCacheService } from '../bookings/services/bookings-cache.service';
 import { PaymentAbandonmentService } from './services/payment-abandonment.service';
+import { PaymentProviderService } from './services/payment-provider.service';
 import { MetricsService } from 'src/infra/metrics/metrics.service';
+import { AuthorizePaymentUseCase } from './use-cases/authorize-payment.use-case';
+import { ConfirmPaymentUseCase } from './use-cases/confirm-payment.use-case';
+import { FailPaymentUseCase } from './use-cases/fail-payment.use-case';
+import { ReconcileLateSuccessUseCase } from './use-cases/reconcile-late-success.use-case';
+import { BookingPaymentLifecycleService } from '../bookings/services/booking-payment-lifecycle.service';
+import { BookingMetricsService } from '../bookings/metrics/booking-metrics.service';
+import { createBookingMetricsMock } from '../bookings/metrics/booking-metrics.mock';
 
 describe('PaymentHandler', () => {
   let handler: PaymentHandler;
@@ -30,17 +38,32 @@ describe('PaymentHandler', () => {
   };
   const seatReleaseService = {
     releaseSeatsForBooking: jest.fn(),
+    confirmSeatsForPaidBooking: jest.fn(),
   };
   const bookingsCache = {
     invalidateBooking: jest.fn(),
   };
   const paymentAbandonmentService = {
     refundLateSuccessBestEffort: jest.fn(),
-    markLateSuccessRefunded: jest.fn(),
+    markLateSuccessReconciliationRecorded: jest.fn(),
+    markLateSuccessRefundCompleted: jest.fn(),
+  };
+  const paymentProviderService = {
+    supportsCaptureAfterAuthorize: jest.fn().mockReturnValue(false),
+    captureAuthorizedPayment: jest.fn(),
   };
   const logger = {
     warn: jest.fn(),
     log: jest.fn(),
+  };
+  const metrics = {
+    recordWebhookReceived: jest.fn(),
+    recordWebhookProcessed: jest.fn(),
+    recordWebhookIgnored: jest.fn(),
+    recordPaymentIdempotencyConflict: jest.fn(),
+    recordPayment: jest.fn(),
+    recordPaymentValue: jest.fn(),
+    recordPaymentMethod: jest.fn(),
   };
 
   const baseResult = {
@@ -58,6 +81,7 @@ describe('PaymentHandler', () => {
         id: 't1',
         bookingId: 'b1',
         status: TransactionStatus.PENDING,
+        amount: 100,
         booking: {
           id: 'b1',
           userId: 'u1',
@@ -91,9 +115,11 @@ describe('PaymentHandler', () => {
 
     idempotency.tryStart.mockResolvedValue({ id: 'op_1' });
     seatReleaseService.releaseSeatsForBooking.mockResolvedValue(undefined);
+    seatReleaseService.confirmSeatsForPaidBooking.mockResolvedValue(undefined);
     bookingsCache.invalidateBooking.mockResolvedValue(undefined);
     paymentAbandonmentService.refundLateSuccessBestEffort.mockResolvedValue(undefined);
-    paymentAbandonmentService.markLateSuccessRefunded.mockResolvedValue(undefined);
+    paymentAbandonmentService.markLateSuccessReconciliationRecorded.mockResolvedValue(undefined);
+    paymentAbandonmentService.markLateSuccessRefundCompleted.mockResolvedValue(undefined);
 
     prisma.transaction.findUnique.mockResolvedValue({
       id: 't1',
@@ -115,6 +141,11 @@ describe('PaymentHandler', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PaymentHandler,
+        AuthorizePaymentUseCase,
+        ConfirmPaymentUseCase,
+        FailPaymentUseCase,
+        ReconcileLateSuccessUseCase,
+        BookingPaymentLifecycleService,
         { provide: PrismaService, useValue: prisma },
         { provide: Logger, useValue: logger },
         { provide: OutboxService, useValue: outbox },
@@ -122,18 +153,9 @@ describe('PaymentHandler', () => {
         { provide: SeatReleaseService, useValue: seatReleaseService },
         { provide: BookingsCacheService, useValue: bookingsCache },
         { provide: PaymentAbandonmentService, useValue: paymentAbandonmentService },
-        {
-          provide: MetricsService,
-          useValue: {
-            recordWebhookReceived: jest.fn(),
-            recordWebhookProcessed: jest.fn(),
-            recordWebhookIgnored: jest.fn(),
-            recordPaymentIdempotencyConflict: jest.fn(),
-            recordPayment: jest.fn(),
-            recordPaymentValue: jest.fn(),
-            recordPaymentMethod: jest.fn(),
-          },
-        },
+        { provide: PaymentProviderService, useValue: paymentProviderService },
+        { provide: MetricsService, useValue: metrics },
+        { provide: BookingMetricsService, useValue: createBookingMetricsMock() },
       ],
     }).compile();
 
@@ -170,8 +192,7 @@ describe('PaymentHandler', () => {
       where: { id: 'b1', status: BookingStatus.PAYMENT_PENDING },
       data: { status: BookingStatus.PAID },
     });
-    expect(tx.flightSeat.updateMany).toHaveBeenCalled();
-    expect(tx.seatHold.deleteMany).toHaveBeenCalled();
+    expect(seatReleaseService.confirmSeatsForPaidBooking).toHaveBeenCalledWith('b1', tx);
     expect(outbox.enqueue).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -196,7 +217,7 @@ describe('PaymentHandler', () => {
       where: { id: 'b1', status: BookingStatus.PAYMENT_PENDING },
       data: { status: BookingStatus.CANCELED },
     });
-    expect(seatReleaseService.releaseSeatsForBooking).toHaveBeenCalledWith('b1', tx);
+    expect(seatReleaseService.releaseSeatsForBooking).toHaveBeenCalledWith('b1', tx, 'payment_canceled');
     expect(tx.flightInstance.update).toHaveBeenCalledWith({
       where: { id: 'fi-1' },
       data: { seatsAvailable: 10 },
@@ -249,11 +270,12 @@ describe('PaymentHandler', () => {
       'p1',
       't1',
     );
-    expect(paymentAbandonmentService.markLateSuccessRefunded).toHaveBeenCalledWith(
+    expect(paymentAbandonmentService.markLateSuccessReconciliationRecorded).toHaveBeenCalledWith(
       't1',
       'p1',
       expect.any(Object),
     );
+    expect(paymentAbandonmentService.markLateSuccessRefundCompleted).toHaveBeenCalledWith('t1');
     expect(outbox.enqueue).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -330,6 +352,7 @@ describe('PaymentHandler', () => {
           id: 't1',
           bookingId: 'b1',
           status: TransactionStatus.AUTHORIZED,
+          amount: 100,
           booking: {
             id: 'b1',
             userId: 'u1',
@@ -386,7 +409,7 @@ describe('PaymentHandler', () => {
       where: { id: 'b1', status: BookingStatus.PAYMENT_PENDING },
       data: { status: BookingStatus.CANCELED },
     });
-    expect(seatReleaseService.releaseSeatsForBooking).toHaveBeenCalledWith('b1', tx);
+    expect(seatReleaseService.releaseSeatsForBooking).toHaveBeenCalledWith('b1', tx, 'payment_failed');
     expect(tx.flightInstance.update).toHaveBeenCalledWith({
       where: { id: 'fi-1' },
       data: { seatsAvailable: 10 },

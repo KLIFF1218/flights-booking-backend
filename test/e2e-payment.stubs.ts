@@ -20,6 +20,8 @@ export function createE2ePaymentProviderStub() {
       externalId ? E2E_PAYMENT_REDIRECT_URL : null,
     cancelPendingPayment: async () => undefined,
     refundSucceededPayment: async () => undefined,
+    captureAuthorizedPayment: async () => undefined,
+    supportsCaptureAfterAuthorize: () => true,
   };
 }
 
@@ -28,7 +30,8 @@ export function createE2ePaymentAbandonmentStub() {
     abandonPayment: async () => undefined,
     cancelPendingPaymentAtProviderBestEffort: async () => undefined,
     refundLateSuccessBestEffort: async () => undefined,
-    markLateSuccessRefunded: async () => undefined,
+    markLateSuccessReconciliationRecorded: async () => undefined,
+    markLateSuccessRefundCompleted: async () => undefined,
     compensateTicketingFailure: async () => undefined,
   };
 }
@@ -51,7 +54,7 @@ export function createE2eYookassaWebhookStub() {
           status = TransactionStatus.CANCELED;
           break;
         case 'payment.waiting_for_capture':
-          status = TransactionStatus.SUCCEED;
+          status = TransactionStatus.AUTHORIZED;
           break;
         default:
           break;
@@ -65,6 +68,9 @@ export function createE2eYookassaWebhookStub() {
         eventId: `${dto.event}:${paymentId}`,
         status,
         method: dto.object.payment_method?.type ?? 'unknown',
+        ...(dto.event === 'payment.waiting_for_capture'
+          ? { requiresCaptureAfterAuthorize: true }
+          : {}),
       };
     },
   };
