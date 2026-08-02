@@ -11,6 +11,7 @@ type StripeClient = InstanceType<typeof Stripe>;
 
 @Injectable()
 export class StripeService implements PaymentProviderAdapter {
+  readonly provider = PaymentProvider.STRIPE;
   private stripeClient: StripeClient | null = null;
 
   constructor(
@@ -89,6 +90,10 @@ export class StripeService implements PaymentProviderAdapter {
     return { externalId: session.id, redirectUrl: session.url ?? successUrl, meta: session };
   }
 
+  async getPendingPaymentRedirectUrl(sessionId: string): Promise<string | null> {
+    return this.getOpenCheckoutSessionUrl(sessionId);
+  }
+
   async getOpenCheckoutSessionUrl(sessionId: string): Promise<string | null> {
     const stripe = this.getStripeClient();
     const session = await stripe.checkout.sessions.retrieve(sessionId);
@@ -98,6 +103,10 @@ export class StripeService implements PaymentProviderAdapter {
     }
 
     return null;
+  }
+
+  async cancelPendingPayment(sessionId: string): Promise<void> {
+    await this.cancelPendingCheckoutSession(sessionId);
   }
 
   async cancelPendingCheckoutSession(sessionId: string): Promise<void> {

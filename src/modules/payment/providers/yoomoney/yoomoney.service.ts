@@ -17,6 +17,7 @@ import { isYookassaConfigured } from 'src/config/yookassa.config';
 
 @Injectable()
 export class YookassaProvider implements PaymentProviderAdapter {
+  readonly provider = PaymentProvider.YOOKASSA;
   private readonly allowedIps: string[];
 
   constructor(
@@ -141,6 +142,14 @@ export class YookassaProvider implements PaymentProviderAdapter {
     return redirectUrl || null;
   }
 
+  async captureAuthorizedPayment(paymentId: string): Promise<void> {
+    await this.capturePayment(paymentId);
+  }
+
+  async cancelPendingPayment(paymentId: string): Promise<void> {
+    await this.cancelPendingPaymentIfNeeded(paymentId);
+  }
+
   async cancelPendingPaymentIfNeeded(paymentId: string): Promise<void> {
     const payment = await this.getPayment(paymentId);
 
@@ -163,9 +172,9 @@ export class YookassaProvider implements PaymentProviderAdapter {
     }
   }
 
-  async refundPayment(paymentId: string) {
+  async refundPayment(paymentId: string, _idempotencyKey?: string): Promise<void> {
     this.ensureConfigured();
-    return this.yookassa.refunds.create({
+    await this.yookassa.refunds.create({
       payment_id: paymentId,
     });
   }
@@ -182,20 +191,12 @@ export class YookassaProvider implements PaymentProviderAdapter {
     }
 
     let status: TransactionStatus = TransactionStatus.PENDING;
+    let requiresCaptureAfterAuthorize = false;
 
     switch (payload.event) {
       case 'payment.waiting_for_capture':
-        try {
-          await this.capturePayment(paymentId);
-          // Capture succeeded — treat as paid; payment.succeeded may still arrive as no-op.
-          status = TransactionStatus.SUCCEED;
-        } catch (err: unknown) {
-          this.logger.error(
-            { err: err instanceof Error ? err : String(err), paymentId },
-            'Auto-capture failed',
-          );
-          status = TransactionStatus.AUTHORIZED;
-        }
+        status = TransactionStatus.AUTHORIZED;
+        requiresCaptureAfterAuthorize = true;
         break;
       case 'payment.succeeded':
         status = TransactionStatus.SUCCEED;
@@ -220,6 +221,7 @@ export class YookassaProvider implements PaymentProviderAdapter {
 
       status,
       method: payload.object.payment_method?.type ?? 'unknown',
+      requiresCaptureAfterAuthorize,
     };
   }
 
