@@ -1,16 +1,13 @@
-import { BookingStatus, type Prisma, TransactionStatus } from '@prisma/client';
+import { type Prisma, TransactionStatus } from '@prisma/client';
+import {
+  ABANDONABLE_TRANSACTION_STATUSES,
+  SUCCEEDABLE_TRANSACTION_STATUSES,
+  isAbandonableTransactionStatus,
+} from '../domain/payment-transaction.policy';
 
-type TransactionDbClient = Pick<Prisma.TransactionClient, 'transaction' | 'booking'>;
+type TransactionDbClient = Pick<Prisma.TransactionClient, 'transaction'>;
 
-const ABANDONABLE_TRANSACTION_STATUSES: readonly TransactionStatus[] = [
-  TransactionStatus.PENDING,
-  TransactionStatus.AUTHORIZED,
-];
-
-const SUCCEEDABLE_TRANSACTION_STATUSES: readonly TransactionStatus[] = [
-  TransactionStatus.PENDING,
-  TransactionStatus.AUTHORIZED,
-];
+export { isAbandonableTransactionStatus };
 
 export async function finalizeTransactionIfPending(
   client: TransactionDbClient,
@@ -67,40 +64,6 @@ export async function markTransactionAuthorizedIfPending(
   return result.count === 1;
 }
 
-export async function markBookingPaidIfPending(
-  client: TransactionDbClient,
-  bookingId: string,
-): Promise<boolean> {
-  const result = await client.booking.updateMany({
-    where: {
-      id: bookingId,
-      status: BookingStatus.PAYMENT_PENDING,
-    },
-    data: {
-      status: BookingStatus.PAID,
-    },
-  });
-
-  return result.count === 1;
-}
-
-export async function markBookingCanceledIfPaymentPending(
-  client: TransactionDbClient,
-  bookingId: string,
-): Promise<boolean> {
-  const result = await client.booking.updateMany({
-    where: {
-      id: bookingId,
-      status: BookingStatus.PAYMENT_PENDING,
-    },
-    data: {
-      status: BookingStatus.CANCELED,
-    },
-  });
-
-  return result.count === 1;
-}
-
 export async function cancelTransactionIfPending(
   client: TransactionDbClient,
   transactionId: string,
@@ -134,25 +97,4 @@ export async function cancelTransactionIfAbandonable(
   });
 
   return result.count === 1;
-}
-
-export async function markBookingExpiredIfPaymentPending(
-  client: TransactionDbClient,
-  bookingId: string,
-): Promise<boolean> {
-  const result = await client.booking.updateMany({
-    where: {
-      id: bookingId,
-      status: BookingStatus.PAYMENT_PENDING,
-    },
-    data: {
-      status: BookingStatus.EXPIRED,
-    },
-  });
-
-  return result.count === 1;
-}
-
-export function isAbandonableTransactionStatus(status: TransactionStatus): boolean {
-  return ABANDONABLE_TRANSACTION_STATUSES.includes(status);
 }
