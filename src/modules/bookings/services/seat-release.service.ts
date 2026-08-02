@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { BookingStatus, Prisma, TransactionStatus } from '@prisma/client';
+import { BookingStatus, Prisma, SeatStatus, TransactionStatus } from '@prisma/client';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { resolveSeatHoldExpiresAt } from '../utils/seat-hold.util';
 import { runWithConcurrency } from 'src/common/utils/concurrent.util';
@@ -46,13 +46,34 @@ export class SeatReleaseService {
 
     if (seatIds.length > 0) {
       await tx.flightSeat.updateMany({
-        where: { id: { in: seatIds }, status: 'RESERVED' },
-        data: { status: 'AVAILABLE' },
+        where: { id: { in: seatIds }, status: SeatStatus.RESERVED },
+        data: { status: SeatStatus.AVAILABLE },
       });
     }
 
     await tx.seatAssignment.deleteMany({ where: { bookingId } });
     this.bookingMetrics.recordSeatRelease(reason);
+  }
+
+  async confirmSeatsForPaidBooking(
+    bookingId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    const assignments = await tx.seatAssignment.findMany({
+      where: { bookingId },
+      select: { flightSeatId: true },
+    });
+
+    const seatIds = assignments.map((assignment) => assignment.flightSeatId);
+
+    if (seatIds.length > 0) {
+      await tx.flightSeat.updateMany({
+        where: { id: { in: seatIds } },
+        data: { status: SeatStatus.BOOKED },
+      });
+    }
+
+    await tx.seatHold.deleteMany({ where: { bookingId } });
   }
 
   async revertCheckoutPreparation(bookingId: string): Promise<void> {
