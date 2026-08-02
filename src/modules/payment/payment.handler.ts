@@ -1,38 +1,45 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
-import { BookingStatus, TransactionStatus } from '@prisma/client';
+import { TransactionStatus } from '@prisma/client';
 import { PaymentWebhookResult } from './interfaces/payment-webhook-result.dto';
 import { Logger } from 'nestjs-pino';
-import { OutboxService } from 'src/infra/outbox/outbox.service';
-import { EnumTransport } from '@prisma/client';
 import { IdempotencyService } from './services/idempotency.service';
-import { SeatReleaseService } from '../bookings/services/seat-release.service';
-import { BookingsCacheService } from '../bookings/services/bookings-cache.service';
-import { BookingFlowStage, logBookingFlowStage } from 'src/common/logging/booking-flow.logger';
-import { PaymentAbandonmentService } from './services/payment-abandonment.service';
-import {
-  finalizeTransactionIfPending,
-  finalizeTransactionToSucceed,
-  markBookingCanceledIfPaymentPending,
-  markBookingPaidIfPending,
-  markTransactionAuthorizedIfPending,
-} from './utils/transaction-state.util';
-import { BookingSnapshot } from '../bookings/interfaces/booking-snapshot.interface';
-import { releaseFlightInstanceInventoryForBooking } from '../bookings/utils/booking-inventory.util';
 import { MetricsService } from 'src/infra/metrics/metrics.service';
 import { runSafely } from 'src/common/utils/safe-metrics.util';
+import { finalizeTransactionIfPending } from './utils/transaction-state.util';
+import { BookingPaymentLifecycleService } from '../bookings/services/booking-payment-lifecycle.service';
+import { PaymentProviderService } from './services/payment-provider.service';
+import { PAYMENT_WEBHOOK_IDEMPOTENCY_OPERATION } from './constants/payment-idempotency.constants';
+import { WEBHOOK_PROCESSING_OUTCOME } from './constants/payment-webhook.constants';
+import {
+  shouldIgnoreWebhookAsAlreadyFinalized,
+  shouldIgnoreWebhookAsAlreadySucceeded,
+  shouldReconcileLateSuccess,
+} from './domain/payment-webhook.policy';
+import { AuthorizePaymentUseCase } from './use-cases/authorize-payment.use-case';
+import { ConfirmPaymentUseCase } from './use-cases/confirm-payment.use-case';
+import { FailPaymentUseCase } from './use-cases/fail-payment.use-case';
+import { ReconcileLateSuccessUseCase } from './use-cases/reconcile-late-success.use-case';
+import type {
+  PaymentWebhookCommand,
+  PaymentWebhookTransactionContext,
+  WebhookSideEffects,
+} from './use-cases/payment-webhook.types';
+import type { WebhookProcessingOutcome } from './constants/payment-webhook.constants';
 
 @Injectable()
 export class PaymentHandler {
   constructor(
     private readonly prisma: PrismaService,
     private readonly logger: Logger,
-    private readonly outbox: OutboxService,
     private readonly idempotency: IdempotencyService,
-    private readonly seatReleaseService: SeatReleaseService,
-    private readonly bookingsCache: BookingsCacheService,
-    private readonly paymentAbandonmentService: PaymentAbandonmentService,
+    private readonly bookingPaymentLifecycle: BookingPaymentLifecycleService,
     private readonly metrics: MetricsService,
+    private readonly authorizePaymentUseCase: AuthorizePaymentUseCase,
+    private readonly confirmPaymentUseCase: ConfirmPaymentUseCase,
+    private readonly failPaymentUseCase: FailPaymentUseCase,
+    private readonly reconcileLateSuccessUseCase: ReconcileLateSuccessUseCase,
+    private readonly paymentProviderService: PaymentProviderService,
   ) {}
 
   async processResult(result: PaymentWebhookResult): Promise<void> {
@@ -40,16 +47,14 @@ export class PaymentHandler {
 
     runSafely(() => this.metrics.recordWebhookReceived(provider));
 
-    const operation = await this.idempotency.tryStart(provider, eventId, 'payment-webhook');
+    const operation = await this.idempotency.tryStart(
+      provider,
+      eventId,
+      PAYMENT_WEBHOOK_IDEMPOTENCY_OPERATION,
+    );
 
     if (!operation) {
-      this.logger.warn(
-        {
-          provider,
-          eventId,
-        },
-        'Webhook already processed',
-      );
+      this.logger.warn({ provider, eventId }, 'Webhook already processed');
       runSafely(() => {
         this.metrics.recordPaymentIdempotencyConflict(provider);
         this.metrics.recordWebhookIgnored(provider, 'duplicate');
@@ -59,10 +64,13 @@ export class PaymentHandler {
     }
 
     try {
-      const occurredAt = new Date().toISOString();
-      let invalidateBookingId: string | undefined;
-      let invalidateUserId: string | undefined;
-      let webhookOutcome: string | undefined;
+      const command: PaymentWebhookCommand = {
+        transactionId,
+        paymentId,
+        provider,
+        method,
+        occurredAt: new Date().toISOString(),
+      };
 
       const transaction = await this.prisma.transaction.findUnique({
         where: { id: transactionId },
@@ -73,7 +81,7 @@ export class PaymentHandler {
         throw new NotFoundException('Transaction not found');
       }
 
-      if (transaction.status === TransactionStatus.SUCCEED) {
+      if (shouldIgnoreWebhookAsAlreadySucceeded(transaction.status)) {
         this.logger.warn(
           { transactionId, status: transaction.status },
           'Transaction already finalized',
@@ -84,31 +92,29 @@ export class PaymentHandler {
       }
 
       if (
-        status === TransactionStatus.SUCCEED &&
-        transaction.status === TransactionStatus.CANCELED &&
-        (transaction.booking.status === BookingStatus.EXPIRED ||
-          transaction.booking.status === BookingStatus.CANCELED)
+        shouldReconcileLateSuccess(status, transaction.status, transaction.booking.status)
       ) {
-        invalidateBookingId = await this.reconcileLateSuccess(
+        const sideEffects = await this.reconcileLateSuccessUseCase.execute({
           transaction,
-          paymentId,
-          provider,
-          occurredAt,
-        );
-        invalidateUserId = transaction.booking.userId;
-
-        if (invalidateBookingId && invalidateUserId) {
-          await this.bookingsCache.invalidateBooking(invalidateBookingId, invalidateUserId);
-        }
-
+          command,
+        });
+        await this.applySideEffects(sideEffects, transaction.booking.userId);
         await this.idempotency.complete(operation.id);
-        runSafely(() => this.metrics.recordWebhookProcessed(provider, 'late_success_refunded'));
+        runSafely(() =>
+          this.metrics.recordWebhookProcessed(
+            provider,
+            WEBHOOK_PROCESSING_OUTCOME.LATE_SUCCESS_REFUNDED,
+          ),
+        );
         return;
       }
 
       if (
-        transaction.status === TransactionStatus.CANCELED ||
-        transaction.status === TransactionStatus.FAILED
+        shouldIgnoreWebhookAsAlreadyFinalized(
+          status,
+          transaction.status,
+          transaction.booking.status,
+        )
       ) {
         this.logger.warn(
           { transactionId, status: transaction.status },
@@ -119,7 +125,9 @@ export class PaymentHandler {
         return;
       }
 
-      let reconcileLateSuccess = false;
+      let sideEffects: WebhookSideEffects = {};
+      let needsLateSuccessReconciliation = false;
+      const shouldCaptureAfterAuthorize = result.requiresCaptureAfterAuthorize ?? false;
 
       await this.prisma.$transaction(async (tx) => {
         const current = await tx.transaction.findUnique({
@@ -131,125 +139,16 @@ export class PaymentHandler {
           throw new NotFoundException('Transaction not found');
         }
 
+        const currentContext = current as PaymentWebhookTransactionContext;
+
         if (status === TransactionStatus.AUTHORIZED) {
-          await markTransactionAuthorizedIfPending(tx, transactionId, {
-            externalId: paymentId,
-          });
-          webhookOutcome = 'authorized';
+          sideEffects = await this.authorizePaymentUseCase.execute(tx, command);
           return;
         }
 
         if (status === TransactionStatus.SUCCEED) {
-          const finalized = await finalizeTransactionToSucceed(tx, transactionId, {
-            externalId: paymentId,
-          });
-
-          if (!finalized) {
-            if (
-              current.booking.status === BookingStatus.EXPIRED ||
-              current.booking.status === BookingStatus.CANCELED
-            ) {
-              reconcileLateSuccess = true;
-            } else {
-              this.logger.warn(
-                {
-                  transactionId,
-                  bookingId: current.bookingId,
-                  bookingStatus: current.booking.status,
-                  transactionStatus: current.status,
-                },
-                'Success webhook could not finalize payable transaction; skipping late-success refund',
-              );
-              webhookOutcome = 'skipped_unpayable';
-            }
-            return;
-          }
-
-          const markedPaid = await markBookingPaidIfPending(tx, current.bookingId);
-          if (!markedPaid) {
-            if (
-              current.booking.status === BookingStatus.EXPIRED ||
-              current.booking.status === BookingStatus.CANCELED
-            ) {
-              reconcileLateSuccess = true;
-            } else {
-              this.logger.warn(
-                {
-                  transactionId,
-                  bookingId: current.bookingId,
-                  bookingStatus: current.booking.status,
-                },
-                'Success webhook finalized transaction but booking was not PAYMENT_PENDING; skipping late-success refund',
-              );
-              webhookOutcome = 'skipped_booking_state';
-            }
-            return;
-          }
-
-          const seats = await tx.seatAssignment.findMany({
-            where: { bookingId: current.bookingId },
-            select: { flightSeatId: true },
-          });
-
-          const seatIds = seats.map((s) => s.flightSeatId);
-
-          await tx.flightSeat.updateMany({
-            where: {
-              id: { in: seatIds },
-            },
-            data: {
-              status: 'BOOKED',
-            },
-          });
-
-          await tx.seatHold.deleteMany({
-            where: {
-              bookingId: current.bookingId,
-            },
-          });
-
-          await this.outbox.enqueue(tx, {
-            aggregateId: current.bookingId,
-            aggregateType: 'Booking',
-            topic: `${process.env.RABBITMQ_EXCHANGE || 'booking.events'}:booking.paid`,
-            payload: {
-              bookingId: current.bookingId,
-              occurredAt: occurredAt,
-            },
-            transport: EnumTransport.RABBITMQ,
-          });
-
-          await this.outbox.enqueue(tx, {
-            aggregateId: current.bookingId,
-            aggregateType: 'Booking',
-            topic: 'booking.paid',
-            payload: {
-              bookingId: current.bookingId,
-              occurredAt: occurredAt,
-            },
-            transport: EnumTransport.KAFKA,
-          });
-
-          this.logger.log({ bookingId: current.bookingId }, 'Booking marked as PAID');
-          logBookingFlowStage(this.logger, BookingFlowStage.PAYMENT_SUCCEEDED, {
-            bookingId: current.bookingId,
-            transactionId,
-            provider,
-            paymentId,
-          });
-          invalidateBookingId = current.bookingId;
-          invalidateUserId = current.booking.userId;
-          webhookOutcome = 'confirmed';
-
-          runSafely(() => {
-            this.metrics.recordPayment(provider, 'confirmed');
-            this.metrics.recordPaymentValue(
-              Math.round(Number(current.amount) * 100),
-              provider,
-              'confirmed',
-            );
-            this.metrics.recordPaymentMethod(method ?? 'unknown', provider);
-          });
+          sideEffects = await this.confirmPaymentUseCase.execute(tx, command, currentContext);
+          needsLateSuccessReconciliation = sideEffects.needsLateSuccessReconciliation ?? false;
           return;
         }
 
@@ -259,78 +158,44 @@ export class PaymentHandler {
         });
 
         if (!finalized) {
-          webhookOutcome = 'noop';
+          sideEffects = { outcome: WEBHOOK_PROCESSING_OUTCOME.NOOP };
           return;
         }
 
         if (status === TransactionStatus.CANCELED || status === TransactionStatus.FAILED) {
-          const failureReason =
-            status === TransactionStatus.FAILED ? 'payment_failed' : 'payment_canceled';
-
-          const canceled = await markBookingCanceledIfPaymentPending(tx, current.bookingId);
-          if (!canceled) {
-            webhookOutcome = 'noop';
-            return;
-          }
-
-          await this.seatReleaseService.releaseSeatsForBooking(current.bookingId, tx);
-
-          const snapshot = current.booking.snapshot as unknown as BookingSnapshot;
-          if (snapshot) {
-            await releaseFlightInstanceInventoryForBooking(tx, current.bookingId, snapshot);
-          }
-
-          this.logger.log(
-            { bookingId: current.bookingId, reason: failureReason },
-            'Booking canceled after payment failure',
-          );
-
-          await this.outbox.enqueue(tx, {
-            aggregateId: current.bookingId,
-            aggregateType: 'Booking',
-            topic: 'payment.failed',
-            payload: {
-              bookingId: current.bookingId,
-              userId: current.booking.userId,
-              transactionId: current.id,
-              reason: failureReason,
-              occurredAt: occurredAt,
-            },
-            transport: EnumTransport.KAFKA,
-          });
-          invalidateBookingId = current.bookingId;
-          invalidateUserId = current.booking.userId;
-          webhookOutcome = status === TransactionStatus.FAILED ? 'failed' : 'canceled';
-
-          runSafely(() => {
-            this.metrics.recordPayment(provider, webhookOutcome!);
-            this.metrics.recordPaymentValue(
-              Math.round(Number(current.amount) * 100),
-              provider,
-              webhookOutcome!,
-            );
-          });
+          sideEffects = await this.failPaymentUseCase.execute(tx, command, currentContext, status);
         }
       });
 
-      if (reconcileLateSuccess) {
-        invalidateBookingId = await this.reconcileLateSuccess(
-          transaction,
-          paymentId,
-          provider,
-          occurredAt,
+      if (
+        shouldCaptureAfterAuthorize &&
+        sideEffects.outcome === WEBHOOK_PROCESSING_OUTCOME.AUTHORIZED
+      ) {
+        const captureSideEffects = await this.captureAuthorizedPaymentAndConfirm(
+          command,
+          transactionId,
         );
-        invalidateUserId = transaction.booking.userId;
-        webhookOutcome = 'late_success_refunded';
+        sideEffects = captureSideEffects.sideEffects;
+        needsLateSuccessReconciliation = captureSideEffects.needsLateSuccessReconciliation;
       }
 
-      if (invalidateBookingId && invalidateUserId) {
-        await this.bookingsCache.invalidateBooking(invalidateBookingId, invalidateUserId);
+      if (needsLateSuccessReconciliation) {
+        sideEffects = await this.reconcileLateSuccessUseCase.execute({
+          transaction,
+          command,
+        });
       }
+
+      await this.applySideEffects(sideEffects, transaction.booking.userId);
 
       await this.idempotency.complete(operation.id);
-      if (webhookOutcome) {
-        runSafely(() => this.metrics.recordWebhookProcessed(provider, webhookOutcome!));
+      if (sideEffects.outcome) {
+        runSafely(() =>
+          this.metrics.recordWebhookProcessed(
+            provider,
+            sideEffects.outcome as WebhookProcessingOutcome,
+          ),
+        );
       }
     } catch (error) {
       await this.idempotency.fail(operation.id);
@@ -339,63 +204,69 @@ export class PaymentHandler {
     }
   }
 
-  private async reconcileLateSuccess(
-    transaction: {
-      id: string;
-      bookingId: string;
-      booking: { status: BookingStatus };
-      providerMeta: unknown;
-    },
-    paymentId: string,
-    provider: PaymentWebhookResult['provider'],
-    occurredAt: string,
-  ): Promise<string> {
-    const providerMeta =
-      transaction.providerMeta && typeof transaction.providerMeta === 'object'
-        ? (transaction.providerMeta as Record<string, unknown>)
-        : {};
+  private async applySideEffects(
+    sideEffects: WebhookSideEffects,
+    fallbackUserId: string,
+  ): Promise<void> {
+    const invalidateBookingId = sideEffects.invalidateBookingId;
+    const invalidateUserId = sideEffects.invalidateUserId ?? fallbackUserId;
 
-    if (providerMeta.lateSuccessRefunded === true) {
-      this.logger.warn(
-        { transactionId: transaction.id, bookingId: transaction.bookingId },
-        'Late successful payment already refunded',
-      );
-      return transaction.bookingId;
+    if (invalidateBookingId && invalidateUserId) {
+      await this.bookingPaymentLifecycle.invalidateBooking(invalidateBookingId, invalidateUserId);
+    }
+  }
+
+  private async captureAuthorizedPaymentAndConfirm(
+    command: PaymentWebhookCommand,
+    transactionId: string,
+  ): Promise<{
+    sideEffects: WebhookSideEffects;
+    needsLateSuccessReconciliation: boolean;
+  }> {
+    if (!this.paymentProviderService.supportsCaptureAfterAuthorize(command.provider)) {
+      return { sideEffects: {}, needsLateSuccessReconciliation: false };
     }
 
-    await this.paymentAbandonmentService.refundLateSuccessBestEffort(
-      provider,
-      paymentId,
-      transaction.id,
-    );
+    try {
+      await this.paymentProviderService.captureAuthorizedPayment(
+        command.provider,
+        command.paymentId,
+      );
+    } catch (error) {
+      this.logger.error(
+        {
+          err: error instanceof Error ? error : String(error),
+          transactionId,
+          paymentId: command.paymentId,
+          provider: command.provider,
+        },
+        'Capture after authorize failed; transaction remains AUTHORIZED',
+      );
+
+      return { sideEffects: {}, needsLateSuccessReconciliation: false };
+    }
+
+    let sideEffects: WebhookSideEffects = {};
+    let needsLateSuccessReconciliation = false;
 
     await this.prisma.$transaction(async (tx) => {
-      await this.paymentAbandonmentService.markLateSuccessRefunded(transaction.id, paymentId, tx);
-
-      await this.outbox.enqueue(tx, {
-        aggregateId: transaction.bookingId,
-        aggregateType: 'Booking',
-        topic: 'payment.reconciliation.refunded',
-        payload: {
-          bookingId: transaction.bookingId,
-          transactionId: transaction.id,
-          paymentId,
-          reason: 'late_success_after_expiration',
-          occurredAt,
-        },
-        transport: EnumTransport.KAFKA,
+      const current = await tx.transaction.findUnique({
+        where: { id: transactionId },
+        include: { booking: true },
       });
+
+      if (!current) {
+        throw new NotFoundException('Transaction not found');
+      }
+
+      sideEffects = await this.confirmPaymentUseCase.execute(
+        tx,
+        command,
+        current as PaymentWebhookTransactionContext,
+      );
+      needsLateSuccessReconciliation = sideEffects.needsLateSuccessReconciliation ?? false;
     });
 
-    this.logger.warn(
-      {
-        bookingId: transaction.bookingId,
-        transactionId: transaction.id,
-        paymentId,
-      },
-      'Late successful payment refunded after booking expiration',
-    );
-
-    return transaction.bookingId;
+    return { sideEffects, needsLateSuccessReconciliation };
   }
 }

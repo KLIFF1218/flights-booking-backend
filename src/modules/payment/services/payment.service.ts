@@ -20,10 +20,12 @@ import { PAYMENT_GRACE_MINUTES } from '../../bookings/constants/booking-expirati
 import { runSafely } from 'src/common/utils/safe-metrics.util';
 import { normalizePaymentFailureReason } from 'src/infra/metrics/normalize-metric-reason.util';
 import { PaymentAbandonmentService } from './payment-abandonment.service';
+import { canStartCheckoutPayment } from '../domain/payment-booking.policy';
 import {
-  cancelTransactionIfAbandonable,
+  hasActivePaymentSession,
   isAbandonableTransactionStatus,
-} from '../utils/transaction-state.util';
+} from '../domain/payment-transaction.policy';
+import { cancelTransactionIfAbandonable } from '../utils/transaction-state.util';
 
 @Injectable()
 export class PaymentService {
@@ -57,7 +59,7 @@ export class PaymentService {
 
       await this.bookingExpirationService.ensureActive(booking);
 
-      if (booking.status !== BookingStatus.SEATS_SELECTED) {
+      if (!canStartCheckoutPayment(booking.status)) {
         this.logger.warn(
           { bookingId: booking.id, status: booking.status },
           'Booking has invalid status for payment',
@@ -86,8 +88,7 @@ export class PaymentService {
 
           if (
             existingTransaction &&
-            existingTransaction.status !== TransactionStatus.CANCELED &&
-            existingTransaction.status !== TransactionStatus.FAILED
+            hasActivePaymentSession(existingTransaction.status)
           ) {
             throw new BadRequestException('Payment already initiated');
           }

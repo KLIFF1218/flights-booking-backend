@@ -3,38 +3,28 @@ import { BookingStatus, PaymentProvider, Prisma, TransactionStatus } from '@pris
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { Logger } from 'nestjs-pino';
 import { PaymentProviderService } from './payment-provider.service';
-import { SeatReleaseService } from '../../bookings/services/seat-release.service';
-import { BookingsCacheService } from '../../bookings/services/bookings-cache.service';
-import { releaseFlightInstanceInventoryForBooking } from '../../bookings/utils/booking-inventory.util';
-import { BookingSnapshot } from '../../bookings/interfaces/booking-snapshot.interface';
+import { BookingPaymentLifecycleService } from '../../bookings/services/booking-payment-lifecycle.service';
 import { BookingMetricsService } from '../../bookings/metrics/booking-metrics.service';
 import {
   cancelTransactionIfAbandonable,
   isAbandonableTransactionStatus,
-  markBookingExpiredIfPaymentPending,
 } from '../utils/transaction-state.util';
+import { canAbandonPayment } from '../domain/payment-webhook.policy';
+import {
+  hasTicketingCompensationCompleted,
+  hasTicketingInventoryReleased,
+  hasTicketingRefundCompleted,
+} from '../domain/payment-reconciliation.policy';
 import { MetricsService } from 'src/infra/metrics/metrics.service';
 import { runSafely } from 'src/common/utils/safe-metrics.util';
-
-type AbandonPaymentCandidate = {
-  id: string;
-  userId: string;
-  status: BookingStatus;
-  transaction: {
-    id: string;
-    status: TransactionStatus;
-    provider: PaymentProvider;
-    externalId: string | null;
-  } | null;
-};
+import { mergePaymentProviderMeta } from '../types/payment-provider-meta.types';
 
 @Injectable()
 export class PaymentAbandonmentService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly paymentProviderService: PaymentProviderService,
-    private readonly seatReleaseService: SeatReleaseService,
-    private readonly bookingsCache: BookingsCacheService,
+    private readonly bookingPaymentLifecycle: BookingPaymentLifecycleService,
     private readonly logger: Logger,
     private readonly bookingMetrics: BookingMetricsService,
     private readonly metrics: MetricsService,
@@ -86,11 +76,11 @@ export class PaymentAbandonmentService {
       include: { transaction: true },
     });
 
-    if (!booking || !this.canAbandon(booking) || !booking.transaction) {
+    if (!booking || !canAbandonPayment(booking.status, booking.transaction?.status)) {
       return false;
     }
 
-    const transaction = booking.transaction;
+    const transaction = booking.transaction!;
 
     const abandoned = await this.prisma.$transaction(
       async (tx) => {
@@ -99,26 +89,18 @@ export class PaymentAbandonmentService {
           return false;
         }
 
-        const expired = await markBookingExpiredIfPaymentPending(tx, bookingId);
-        if (!expired) {
-          return false;
-        }
-
-        await this.seatReleaseService.releaseSeatsForBooking(bookingId, tx, 'payment_abandoned');
-
-        const snapshot = booking.snapshot as unknown as BookingSnapshot;
-        await releaseFlightInstanceInventoryForBooking(tx, bookingId, snapshot);
-        this.bookingMetrics.recordInventoryReleased('payment_abandoned');
-
-        return true;
+        return await this.bookingPaymentLifecycle.expireUnpaidPaymentPending(
+          tx,
+          bookingId,
+          booking.snapshot,
+        );
       },
       { timeout: 15_000 },
     );
 
     if (abandoned) {
       await this.cancelPendingPaymentAtProviderBestEffort(transaction);
-      await this.bookingsCache.invalidateBooking(bookingId, booking.userId);
-      this.bookingMetrics.recordBookingExpired('payment_abandoned');
+      await this.bookingPaymentLifecycle.invalidateBooking(bookingId, booking.userId);
       runSafely(() => this.metrics.recordPaymentAbandoned(String(transaction.provider), 'expired'));
       this.logger.log({ bookingId }, 'Payment session abandoned');
     }
@@ -136,22 +118,11 @@ export class PaymentAbandonmentService {
       return;
     }
 
-    try {
-      await this.paymentProviderService.cancelPendingPayment(
-        transaction.provider,
-        transaction.externalId,
-      );
-    } catch (error: unknown) {
-      this.logger.warn(
-        {
-          err: error instanceof Error ? error : String(error),
-          transactionId: transaction.id,
-          provider: transaction.provider,
-          externalId: transaction.externalId,
-        },
-        'Failed to cancel pending payment at provider',
-      );
-    }
+    await this.paymentProviderService.cancelPendingPaymentBestEffort(
+      transaction.provider,
+      transaction.externalId,
+      { transactionId: transaction.id },
+    );
   }
 
   async refundLateSuccessBestEffort(
@@ -193,13 +164,13 @@ export class PaymentAbandonmentService {
     const refundRequired =
       transaction?.status === TransactionStatus.SUCCEED && Boolean(transaction.externalId);
 
-    if (this.hasTicketingCompensationCompleted(transaction?.providerMeta, refundRequired)) {
+    if (hasTicketingCompensationCompleted(transaction?.providerMeta, refundRequired)) {
       this.logger.warn({ bookingId, reason }, 'Ticketing failure compensation already completed');
       return;
     }
 
     if (refundRequired && transaction?.externalId) {
-      if (!this.hasTicketingRefundCompleted(transaction.providerMeta)) {
+      if (!hasTicketingRefundCompleted(transaction.providerMeta)) {
         await this.refundTicketingFailurePayment(bookingId, reason, {
           id: transaction.id,
           provider: transaction.provider,
@@ -215,7 +186,7 @@ export class PaymentAbandonmentService {
       throw new Error('Ticketing failure refund requires payment external id');
     }
 
-    if (this.hasTicketingInventoryReleased(transaction?.providerMeta)) {
+    if (hasTicketingInventoryReleased(transaction?.providerMeta)) {
       return;
     }
 
@@ -256,20 +227,14 @@ export class PaymentAbandonmentService {
     reason: string,
     providerMeta: unknown,
   ): Promise<void> {
-    const meta =
-      providerMeta && typeof providerMeta === 'object'
-        ? (providerMeta as Record<string, unknown>)
-        : {};
-
     await this.prisma.transaction.update({
       where: { id: transactionId },
       data: {
-        providerMeta: {
-          ...meta,
+        providerMeta: mergePaymentProviderMeta(providerMeta, {
           ticketingFailedRefundCompleted: true,
           ticketingFailedReason: reason,
           ticketingFailedRefundedAt: new Date().toISOString(),
-        },
+        }),
       },
     });
   }
@@ -294,33 +259,27 @@ export class PaymentAbandonmentService {
             select: { providerMeta: true },
           });
 
-          if (this.hasTicketingInventoryReleased(current?.providerMeta)) {
+          if (hasTicketingInventoryReleased(current?.providerMeta)) {
             return;
           }
         }
 
-        await this.seatReleaseService.releaseSeatsForBooking(booking.id, tx, 'ticketing_failed');
-
-        const snapshot = booking.snapshot as BookingSnapshot;
-        await releaseFlightInstanceInventoryForBooking(tx, booking.id, snapshot);
-        this.bookingMetrics.recordInventoryReleased('ticketing_failed');
+        await this.bookingPaymentLifecycle.releaseSeatsAndInventoryForTicketingFailure(
+          tx,
+          booking.id,
+          booking.snapshot,
+        );
 
         if (transaction) {
-          const providerMeta =
-            transaction.providerMeta && typeof transaction.providerMeta === 'object'
-              ? (transaction.providerMeta as Record<string, unknown>)
-              : {};
-
           await tx.transaction.update({
             where: { id: transaction.id },
             data: {
-              providerMeta: {
-                ...providerMeta,
+              providerMeta: mergePaymentProviderMeta(transaction.providerMeta, {
                 ticketingFailedRefundCompleted: true,
                 ticketingFailedInventoryReleased: true,
                 ticketingFailedReason: reason,
                 ticketingFailedAt: new Date().toISOString(),
-              },
+              }),
             },
           });
         }
@@ -328,72 +287,43 @@ export class PaymentAbandonmentService {
       { timeout: 15_000 },
     );
 
-    await this.bookingsCache.invalidateBooking(booking.id, booking.userId);
+    await this.bookingPaymentLifecycle.invalidateBooking(booking.id, booking.userId);
     this.logger.error(
       { bookingId: booking.id, reason },
       'Ticketing failure compensation completed',
     );
   }
 
-  private hasTicketingRefundCompleted(providerMeta: unknown): boolean {
-    if (!providerMeta || typeof providerMeta !== 'object') {
-      return false;
-    }
-
-    return (providerMeta as Record<string, unknown>).ticketingFailedRefundCompleted === true;
-  }
-
-  private hasTicketingInventoryReleased(providerMeta: unknown): boolean {
-    if (!providerMeta || typeof providerMeta !== 'object') {
-      return false;
-    }
-
-    return (providerMeta as Record<string, unknown>).ticketingFailedInventoryReleased === true;
-  }
-
-  private hasTicketingCompensationCompleted(
-    providerMeta: unknown,
-    refundRequired: boolean,
-  ): boolean {
-    if (refundRequired) {
-      return (
-        this.hasTicketingRefundCompleted(providerMeta) &&
-        this.hasTicketingInventoryReleased(providerMeta)
-      );
-    }
-
-    return this.hasTicketingInventoryReleased(providerMeta);
-  }
-
-  async markLateSuccessRefunded(
+  async markLateSuccessReconciliationRecorded(
     transactionId: string,
     paymentId: string,
     tx: Prisma.TransactionClient,
   ): Promise<void> {
     const transaction = await tx.transaction.findUnique({ where: { id: transactionId } });
 
-    const providerMeta =
-      transaction?.providerMeta && typeof transaction.providerMeta === 'object'
-        ? (transaction.providerMeta as Record<string, unknown>)
-        : {};
-
     await tx.transaction.update({
       where: { id: transactionId },
       data: {
         externalId: paymentId,
-        providerMeta: {
-          ...providerMeta,
-          lateSuccessRefunded: true,
-          lateSuccessRefundedAt: new Date().toISOString(),
-        },
+        providerMeta: mergePaymentProviderMeta(transaction?.providerMeta, {
+          lateSuccessReconciliationRecorded: true,
+          lateSuccessReconciliationRecordedAt: new Date().toISOString(),
+        }),
       },
     });
   }
 
-  private canAbandon(booking: AbandonPaymentCandidate): boolean {
-    return (
-      booking.status === BookingStatus.PAYMENT_PENDING &&
-      Boolean(booking.transaction && isAbandonableTransactionStatus(booking.transaction.status))
-    );
+  async markLateSuccessRefundCompleted(transactionId: string): Promise<void> {
+    const transaction = await this.prisma.transaction.findUnique({ where: { id: transactionId } });
+
+    await this.prisma.transaction.update({
+      where: { id: transactionId },
+      data: {
+        providerMeta: mergePaymentProviderMeta(transaction?.providerMeta, {
+          lateSuccessRefunded: true,
+          lateSuccessRefundedAt: new Date().toISOString(),
+        }),
+      },
+    });
   }
 }

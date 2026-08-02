@@ -44,7 +44,6 @@ export class OutboxProcessor {
     private readonly kafka: KafkaPublisher,
     private readonly rabbit: BookingEventsPublisher,
     private readonly logger: Logger,
-    @Inject(forwardRef(() => PaymentPendingCancelOutboxHandler))
     private readonly paymentPendingCancelHandler: PaymentPendingCancelOutboxHandler,
     @Inject(forwardRef(() => CheckoutCleanupOutboxHandler))
     private readonly checkoutCleanupHandler: CheckoutCleanupOutboxHandler,
