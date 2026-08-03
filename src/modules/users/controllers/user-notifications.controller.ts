@@ -4,7 +4,6 @@ import { Role } from '@prisma/client';
 import type { Observable } from 'rxjs';
 import { Authorized, Protected, Roles } from 'src/common/decorators';
 import { ApiBadRequestError, ApiUserAuthErrors } from 'src/common/swagger/api-responses.decorator';
-import { NotificationRealtimeService } from 'src/infra/notifications/notification-realtime.service';
 import { UserNotificationsService } from '../user-notifications.service';
 import { UserNotificationResponseDto } from '../dtos/user-notification-response.dto';
 import { ListNotificationsQueryDto } from '../dtos/list-notifications-query.dto';
@@ -17,10 +16,7 @@ import { UnreadNotificationsCountDto } from '../dtos/unread-notifications-count.
 @Roles(Role.USER, Role.ADMIN)
 @Controller({ path: 'users/me/notifications', version: '1' })
 export class UserNotificationsController {
-  constructor(
-    private readonly notificationsService: UserNotificationsService,
-    private readonly notificationRealtime: NotificationRealtimeService,
-  ) {}
+  constructor(private readonly notificationsService: UserNotificationsService) {}
 
   @Get()
   @ApiOperation({ summary: 'List user notifications' })
@@ -64,6 +60,6 @@ export class UserNotificationsController {
   })
   @ApiUserAuthErrors()
   stream(@Authorized('id') userId: string): Observable<MessageEvent> {
-    return this.notificationRealtime.stream(userId);
+    return this.notificationsService.streamForUser(userId);
   }
 }

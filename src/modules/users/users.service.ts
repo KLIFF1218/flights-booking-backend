@@ -89,21 +89,32 @@ export class UsersService {
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto) {
-    const emailChanged = await this.isEmailChanging(userId, dto.email);
-
     try {
-      const user = await this.prismaService.user.update({
-        where: {
-          id: userId,
-        },
-        data: {
-          firstName: dto.firstName,
-          lastName: dto.lastName,
-          phone: dto.phone,
-          email: dto.email,
-          ...(emailChanged ? { emailVerifiedAt: null } : {}),
-        },
-        select: userPublicSelect,
+      const { user, emailChanged } = await this.prismaService.$transaction(async (tx) => {
+        let emailChanged = false;
+
+        if (dto.email !== undefined) {
+          const current = await tx.user.findUnique({
+            where: { id: userId },
+            select: { email: true },
+          });
+
+          emailChanged = current?.email !== dto.email;
+        }
+
+        const user = await tx.user.update({
+          where: { id: userId },
+          data: {
+            firstName: dto.firstName,
+            lastName: dto.lastName,
+            phone: dto.phone,
+            email: dto.email,
+            ...(emailChanged ? { emailVerifiedAt: null } : {}),
+          },
+          select: userPublicSelect,
+        });
+
+        return { user, emailChanged };
       });
 
       if (emailChanged && user.email) {
@@ -124,19 +135,6 @@ export class UsersService {
 
       throw error;
     }
-  }
-
-  private async isEmailChanging(userId: string, email: string | undefined): Promise<boolean> {
-    if (email === undefined) {
-      return false;
-    }
-
-    const current = await this.prismaService.user.findUnique({
-      where: { id: userId },
-      select: { email: true },
-    });
-
-    return current?.email !== email;
   }
 
   async updateSettings(userId: string, dto: UpdateSettingsDto) {

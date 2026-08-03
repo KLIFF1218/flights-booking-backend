@@ -10,6 +10,7 @@ const mockPrismaService = {
     findUnique: jest.fn(),
     update: jest.fn(),
   },
+  $transaction: jest.fn((fn: (tx: typeof mockPrismaService) => unknown) => fn(mockPrismaService)),
 };
 
 const mockEmailVerification = {

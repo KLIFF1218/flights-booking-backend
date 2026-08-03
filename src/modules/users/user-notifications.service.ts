@@ -1,9 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, type MessageEvent } from '@nestjs/common';
 import { Prisma, UserNotificationType } from '@prisma/client';
+import type { Observable } from 'rxjs';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { runSerializableTransaction } from 'src/common/utils/run-serializable-transaction.util';
-import { UserNotificationResponseDto } from './dtos/user-notification-response.dto';
 import { NotificationRealtimeService } from 'src/infra/notifications/notification-realtime.service';
+import { UserNotificationResponseDto } from './dtos/user-notification-response.dto';
 
 export type CreateUserNotificationInput = {
   userId: string;
@@ -116,6 +117,11 @@ export class UserNotificationsService {
   }
 
   async markRead(userId: string, notificationId: string): Promise<UserNotificationResponseDto> {
+    await this.prisma.userNotification.updateMany({
+      where: { id: notificationId, userId, readAt: null },
+      data: { readAt: new Date() },
+    });
+
     const notification = await this.prisma.userNotification.findFirst({
       where: { id: notificationId, userId },
       select: notificationSelect,
@@ -125,17 +131,11 @@ export class UserNotificationsService {
       throw new NotFoundException('Notification not found');
     }
 
-    if (notification.readAt) {
-      return this.toResponse(notification);
-    }
+    return this.toResponse(notification);
+  }
 
-    const updated = await this.prisma.userNotification.update({
-      where: { id: notificationId },
-      data: { readAt: new Date() },
-      select: notificationSelect,
-    });
-
-    return this.toResponse(updated);
+  streamForUser(userId: string): Observable<MessageEvent> {
+    return this.notificationRealtime.stream(userId);
   }
 
   private isSourceEventIdConflict(error: unknown): boolean {

@@ -20,6 +20,7 @@ describe('UserNotificationsService', () => {
 
   const notificationRealtime = {
     publishCreated: jest.fn().mockResolvedValue(undefined),
+    stream: jest.fn(),
   };
 
   const service = new UserNotificationsService(prisma as never, notificationRealtime as never);
@@ -270,11 +271,12 @@ describe('UserNotificationsService', () => {
         createdAt: new Date(),
       };
 
+      prisma.userNotification.updateMany.mockResolvedValue({ count: 0 });
       prisma.userNotification.findFirst.mockResolvedValue(readNotification);
 
       const result = await service.markRead('user-1', 'n-1');
 
-      expect(prisma.userNotification.update).not.toHaveBeenCalled();
+      expect(prisma.userNotification.updateMany).toHaveBeenCalled();
       expect(result.id).toBe('n-1');
     });
 
@@ -290,23 +292,27 @@ describe('UserNotificationsService', () => {
       };
       const readAt = new Date('2026-07-01T10:00:00Z');
 
-      prisma.userNotification.findFirst.mockResolvedValue(unreadNotification);
-      prisma.userNotification.update.mockResolvedValue({
+      prisma.userNotification.updateMany.mockResolvedValue({ count: 1 });
+      prisma.userNotification.findFirst.mockResolvedValue({
         ...unreadNotification,
         readAt,
       });
 
       const result = await service.markRead('user-1', 'n-2');
 
-      expect(prisma.userNotification.update).toHaveBeenCalledWith({
-        where: { id: 'n-2' },
+      expect(prisma.userNotification.updateMany).toHaveBeenCalledWith({
+        where: { id: 'n-2', userId: 'user-1', readAt: null },
         data: { readAt: expect.any(Date) },
+      });
+      expect(prisma.userNotification.findFirst).toHaveBeenCalledWith({
+        where: { id: 'n-2', userId: 'user-1' },
         select: expect.any(Object),
       });
       expect(result.readAt).toEqual(readAt);
     });
 
     it('throws NotFoundException for another user notification', async () => {
+      prisma.userNotification.updateMany.mockResolvedValue({ count: 0 });
       prisma.userNotification.findFirst.mockResolvedValue(null);
 
       await expect(service.markRead('user-1', 'missing')).rejects.toBeInstanceOf(NotFoundException);
@@ -320,6 +326,18 @@ describe('UserNotificationsService', () => {
       const result = await service.markAllRead('user-1');
 
       expect(result).toEqual({ updated: 4 });
+    });
+  });
+
+  describe('streamForUser', () => {
+    it('delegates to NotificationRealtimeService.stream', () => {
+      const observable = { subscribe: jest.fn() };
+      notificationRealtime.stream.mockReturnValue(observable);
+
+      const result = service.streamForUser('user-1');
+
+      expect(notificationRealtime.stream).toHaveBeenCalledWith('user-1');
+      expect(result).toBe(observable);
     });
   });
 });

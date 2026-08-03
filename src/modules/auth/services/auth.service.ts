@@ -19,7 +19,7 @@ import { runSafely } from 'src/common/utils/safe-metrics.util';
 import {
   resolveCountryFromLocale,
   resolveCurrencyFromLocale,
-} from 'src/modules/users/utils/locale-defaults.util';
+} from 'src/shared/locale/locale-defaults.util';
 
 const INVALID_CREDENTIALS = 'Invalid login or password';
 
