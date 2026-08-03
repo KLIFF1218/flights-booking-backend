@@ -4,7 +4,9 @@ import { SchedulerService } from './scheduler.service';
 import { SeatReleaseService } from '../bookings/services/seat-release.service';
 import { BookingExpirationService } from '../bookings/services/booking-expiration.service';
 import { PaymentAbandonmentService } from '../payment/services/payment-abandonment.service';
-import { CurrencyRatesService } from '../flights/services/currency-rates.service';
+import { PaymentOrphanReconciliationService } from '../payment/services/payment-orphan-reconciliation.service';
+import { SchedulerLockService } from './scheduler-lock.service';
+import { SchedulerMetricsService } from './scheduler-metrics.service';
 
 describe('SchedulerService', () => {
   let service: SchedulerService;
@@ -19,20 +21,28 @@ describe('SchedulerService', () => {
   const paymentAbandonmentService = {
     expireStalePayments: jest.fn(),
   };
-  const currencyRatesService = {
-    refreshRates: jest.fn(),
+  const paymentOrphanReconciliationService = {
+    reconcileOrphanPendingPayments: jest.fn(),
+  };
+  const schedulerLock = {
+    tryAcquireBookingMaintenanceLock: jest.fn(),
+  };
+  const schedulerMetrics = {
+    recordMaintenancePipelineStepFailed: jest.fn(),
   };
   const logger = {
     log: jest.fn(),
     error: jest.fn(),
+    debug: jest.fn(),
   };
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    schedulerLock.tryAcquireBookingMaintenanceLock.mockResolvedValue(true);
     bookingExpirationService.expireStaleBookings.mockResolvedValue(0);
     paymentAbandonmentService.expireStalePayments.mockResolvedValue(0);
+    paymentOrphanReconciliationService.reconcileOrphanPendingPayments.mockResolvedValue(0);
     seatReleaseService.releaseExpiredHolds.mockResolvedValue(0);
-    currencyRatesService.refreshRates.mockResolvedValue({ USD: 1, EUR: 0.92, RUB: 90 });
 
     module = await Test.createTestingModule({
       providers: [
@@ -40,7 +50,12 @@ describe('SchedulerService', () => {
         { provide: SeatReleaseService, useValue: seatReleaseService },
         { provide: BookingExpirationService, useValue: bookingExpirationService },
         { provide: PaymentAbandonmentService, useValue: paymentAbandonmentService },
-        { provide: CurrencyRatesService, useValue: currencyRatesService },
+        {
+          provide: PaymentOrphanReconciliationService,
+          useValue: paymentOrphanReconciliationService,
+        },
+        { provide: SchedulerLockService, useValue: schedulerLock },
+        { provide: SchedulerMetricsService, useValue: schedulerMetrics },
         { provide: Logger, useValue: logger },
       ],
     }).compile();
@@ -53,13 +68,30 @@ describe('SchedulerService', () => {
   });
 
   describe('runBookingMaintenance', () => {
-    it('runs expiration, payment abandonment, then hold release in order', async () => {
+    it('skips the pipeline when the distributed lock is not acquired', async () => {
+      schedulerLock.tryAcquireBookingMaintenanceLock.mockResolvedValue(false);
+
+      await service.runBookingMaintenance();
+
+      expect(bookingExpirationService.expireStaleBookings).not.toHaveBeenCalled();
+      expect(logger.debug).toHaveBeenCalledWith(
+        'Skipping booking maintenance — lock held by another instance',
+      );
+    });
+
+    it('runs expiration, orphan reconciliation, payment abandonment, then hold release', async () => {
       const callOrder: string[] = [];
 
       bookingExpirationService.expireStaleBookings.mockImplementation(async () => {
         callOrder.push('expire');
         return 2;
       });
+      paymentOrphanReconciliationService.reconcileOrphanPendingPayments.mockImplementation(
+        async () => {
+          callOrder.push('reconcile');
+          return 0;
+        },
+      );
       paymentAbandonmentService.expireStalePayments.mockImplementation(async () => {
         callOrder.push('abandon');
         return 1;
@@ -71,16 +103,18 @@ describe('SchedulerService', () => {
 
       await service.runBookingMaintenance();
 
-      expect(callOrder).toEqual(['expire', 'abandon', 'holds']);
+      expect(callOrder).toEqual(['expire', 'reconcile', 'abandon', 'holds']);
     });
 
     it('logs counts only when maintenance work was performed', async () => {
       bookingExpirationService.expireStaleBookings.mockResolvedValue(3);
+      paymentOrphanReconciliationService.reconcileOrphanPendingPayments.mockResolvedValue(1);
       paymentAbandonmentService.expireStalePayments.mockResolvedValue(2);
 
       await service.runBookingMaintenance();
 
       expect(logger.log).toHaveBeenCalledWith('Expired 3 bookings');
+      expect(logger.log).toHaveBeenCalledWith('Reconciled 1 orphan pending payment sessions');
       expect(logger.log).toHaveBeenCalledWith('Abandoned 2 stale payment sessions');
     });
 
@@ -88,49 +122,54 @@ describe('SchedulerService', () => {
       await service.runBookingMaintenance();
 
       expect(bookingExpirationService.expireStaleBookings).toHaveBeenCalled();
+      expect(paymentOrphanReconciliationService.reconcileOrphanPendingPayments).toHaveBeenCalled();
       expect(paymentAbandonmentService.expireStalePayments).toHaveBeenCalled();
       expect(seatReleaseService.releaseExpiredHolds).toHaveBeenCalled();
       expect(logger.log).not.toHaveBeenCalled();
     });
 
-    it('logs and swallows errors from booking expiration', async () => {
+    it('continues the pipeline when booking expiration fails', async () => {
       const error = new Error('expire failed');
       bookingExpirationService.expireStaleBookings.mockRejectedValue(error);
 
-      await expect(service.runBookingMaintenance()).resolves.toBeUndefined();
+      await service.runBookingMaintenance();
 
-      expect(logger.error).toHaveBeenCalledWith(error, 'Booking maintenance failed');
-      expect(paymentAbandonmentService.expireStalePayments).not.toHaveBeenCalled();
-      expect(seatReleaseService.releaseExpiredHolds).not.toHaveBeenCalled();
+      expect(schedulerMetrics.recordMaintenancePipelineStepFailed).toHaveBeenCalledWith(
+        'expire_bookings',
+      );
+      expect(logger.error).toHaveBeenCalledWith(
+        error,
+        'Booking maintenance step failed: expire_bookings',
+      );
+      expect(paymentOrphanReconciliationService.reconcileOrphanPendingPayments).toHaveBeenCalled();
+      expect(paymentAbandonmentService.expireStalePayments).toHaveBeenCalled();
+      expect(seatReleaseService.releaseExpiredHolds).toHaveBeenCalled();
     });
 
-    it('logs and swallows errors from payment abandonment', async () => {
+    it('continues the pipeline when payment abandonment fails', async () => {
       const error = new Error('abandon failed');
       paymentAbandonmentService.expireStalePayments.mockRejectedValue(error);
 
-      await expect(service.runBookingMaintenance()).resolves.toBeUndefined();
+      await service.runBookingMaintenance();
 
       expect(bookingExpirationService.expireStaleBookings).toHaveBeenCalled();
-      expect(logger.error).toHaveBeenCalledWith(error, 'Booking maintenance failed');
-      expect(seatReleaseService.releaseExpiredHolds).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('refreshFxRates', () => {
-    it('refreshes rates and logs success', async () => {
-      await service.refreshFxRates();
-
-      expect(currencyRatesService.refreshRates).toHaveBeenCalled();
-      expect(logger.log).toHaveBeenCalledWith('FX rates refreshed');
+      expect(schedulerMetrics.recordMaintenancePipelineStepFailed).toHaveBeenCalledWith(
+        'abandon_payments',
+      );
+      expect(seatReleaseService.releaseExpiredHolds).toHaveBeenCalled();
     });
 
-    it('logs and swallows refresh errors', async () => {
-      const error = new Error('fx failed');
-      currencyRatesService.refreshRates.mockRejectedValue(error);
+    it('records metrics when orphan reconciliation fails but still runs later steps', async () => {
+      const error = new Error('reconcile failed');
+      paymentOrphanReconciliationService.reconcileOrphanPendingPayments.mockRejectedValue(error);
 
-      await expect(service.refreshFxRates()).resolves.toBeUndefined();
+      await service.runBookingMaintenance();
 
-      expect(logger.error).toHaveBeenCalledWith(error, 'FX rates refresh failed');
+      expect(schedulerMetrics.recordMaintenancePipelineStepFailed).toHaveBeenCalledWith(
+        'reconcile_orphan_payments',
+      );
+      expect(paymentAbandonmentService.expireStalePayments).toHaveBeenCalled();
+      expect(seatReleaseService.releaseExpiredHolds).toHaveBeenCalled();
     });
   });
 });

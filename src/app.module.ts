@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import currencyConfig from './config/currency.config';
 import { APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 
 import { LoggerModule } from 'nestjs-pino';
 import { SentryModule } from '@sentry/nestjs/setup';
@@ -60,6 +61,8 @@ import { redisConfig } from './config/redis.config';
     }),
 
     SentryModule.forRoot(),
+
+    ScheduleModule.forRoot(),
 
     InfraModule,
     RedisModule,

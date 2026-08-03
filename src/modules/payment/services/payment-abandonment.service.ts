@@ -14,9 +14,14 @@ import {
   hasTicketingCompensationCompleted,
   hasTicketingInventoryReleased,
   hasTicketingRefundCompleted,
+  isTicketingCompensationRecorded,
 } from '../domain/payment-reconciliation.policy';
 import { MetricsService } from 'src/infra/metrics/metrics.service';
 import { runSafely } from 'src/common/utils/safe-metrics.util';
+import {
+  PAYMENT_ABANDON_BATCH_SIZE,
+  PAYMENT_ABANDON_MAX_BATCHES_PER_RUN,
+} from '../constants/payment-maintenance.constants';
 import { mergePaymentProviderMeta } from '../types/payment-provider-meta.types';
 
 @Injectable()
@@ -30,29 +35,22 @@ export class PaymentAbandonmentService {
     private readonly metrics: MetricsService,
   ) {}
 
-  async expireStalePayments(now = new Date(), batchSize = 100): Promise<number> {
+  async expireStalePayments(
+    now = new Date(),
+    batchSize = PAYMENT_ABANDON_BATCH_SIZE,
+    maxBatches = PAYMENT_ABANDON_MAX_BATCHES_PER_RUN,
+  ): Promise<number> {
     const startedAt = Date.now();
 
     try {
-      const staleBookings = await this.prisma.booking.findMany({
-        where: {
-          status: BookingStatus.PAYMENT_PENDING,
-          transaction: {
-            status: {
-              in: [TransactionStatus.PENDING, TransactionStatus.AUTHORIZED],
-            },
-            paymentExpiresAt: { lt: now },
-          },
-        },
-        select: { id: true },
-        take: batchSize,
-      });
+      let totalExpired = 0;
 
-      let expiredCount = 0;
+      for (let batchIndex = 0; batchIndex < maxBatches; batchIndex += 1) {
+        const expiredInBatch = await this.expireStalePaymentsBatch(now, batchSize);
+        totalExpired += expiredInBatch;
 
-      for (const booking of staleBookings) {
-        if (await this.abandonPayment(booking.id)) {
-          expiredCount += 1;
+        if (expiredInBatch < batchSize) {
+          break;
         }
       }
 
@@ -61,13 +59,39 @@ export class PaymentAbandonmentService {
         'abandon_payments',
         (Date.now() - startedAt) / 1000,
       );
-      this.bookingMetrics.recordMaintenanceItemsProcessed('abandon_payments', expiredCount);
+      this.bookingMetrics.recordMaintenanceItemsProcessed('abandon_payments', totalExpired);
 
-      return expiredCount;
+      return totalExpired;
     } catch (error) {
       this.bookingMetrics.recordMaintenanceRun('abandon_payments', 'failure');
       throw error;
     }
+  }
+
+  private async expireStalePaymentsBatch(now: Date, batchSize: number): Promise<number> {
+    const staleBookings = await this.prisma.booking.findMany({
+      where: {
+        status: BookingStatus.PAYMENT_PENDING,
+        transaction: {
+          status: {
+            in: [TransactionStatus.PENDING, TransactionStatus.AUTHORIZED],
+          },
+          paymentExpiresAt: { lt: now },
+        },
+      },
+      select: { id: true },
+      take: batchSize,
+    });
+
+    let expiredCount = 0;
+
+    for (const booking of staleBookings) {
+      if (await this.abandonPayment(booking.id)) {
+        expiredCount += 1;
+      }
+    }
+
+    return expiredCount;
   }
 
   async abandonPayment(bookingId: string): Promise<boolean> {
@@ -171,6 +195,14 @@ export class PaymentAbandonmentService {
 
     if (refundRequired && transaction?.externalId) {
       if (!hasTicketingRefundCompleted(transaction.providerMeta)) {
+        if (!isTicketingCompensationRecorded(transaction.providerMeta)) {
+          await this.markTicketingCompensationRecorded(
+            transaction.id,
+            reason,
+            transaction.providerMeta,
+          );
+        }
+
         await this.refundTicketingFailurePayment(bookingId, reason, {
           id: transaction.id,
           provider: transaction.provider,
@@ -188,6 +220,14 @@ export class PaymentAbandonmentService {
 
     if (hasTicketingInventoryReleased(transaction?.providerMeta)) {
       return;
+    }
+
+    if (transaction && !isTicketingCompensationRecorded(transaction.providerMeta)) {
+      await this.markTicketingCompensationRecorded(
+        transaction.id,
+        reason,
+        transaction.providerMeta,
+      );
     }
 
     await this.finalizeTicketingFailureCompensation(booking, transaction, reason);
@@ -220,6 +260,23 @@ export class PaymentAbandonmentService {
       );
       throw error;
     }
+  }
+
+  private async markTicketingCompensationRecorded(
+    transactionId: string,
+    reason: string,
+    providerMeta: unknown,
+  ): Promise<void> {
+    await this.prisma.transaction.update({
+      where: { id: transactionId },
+      data: {
+        providerMeta: mergePaymentProviderMeta(providerMeta, {
+          ticketingCompensationRecorded: true,
+          ticketingCompensationRecordedAt: new Date().toISOString(),
+          ticketingFailedReason: reason,
+        }),
+      },
+    });
   }
 
   private async markTicketingRefundCompleted(
@@ -275,7 +332,6 @@ export class PaymentAbandonmentService {
             where: { id: transaction.id },
             data: {
               providerMeta: mergePaymentProviderMeta(transaction.providerMeta, {
-                ticketingFailedRefundCompleted: true,
                 ticketingFailedInventoryReleased: true,
                 ticketingFailedReason: reason,
                 ticketingFailedAt: new Date().toISOString(),

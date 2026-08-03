@@ -11,32 +11,31 @@ import {
 import { randomUUID } from 'crypto';
 import { addMinutes } from 'date-fns';
 import { PaymentProviderService } from './payment-provider.service';
-import { MetricsService } from '../../../infra/metrics/metrics.service';
-import { S3Service } from 'src/infra/storage/s3.service';
-import { PaymentMapper } from '../mappers/payment.mapper';
+import { MetricsService } from 'src/infra/metrics/metrics.service';
 import { Logger } from 'nestjs-pino';
 import { BookingExpirationService } from '../../bookings/services/booking-expiration.service';
 import { PAYMENT_GRACE_MINUTES } from '../../bookings/constants/booking-expiration.constants';
 import { runSafely } from 'src/common/utils/safe-metrics.util';
 import { normalizePaymentFailureReason } from 'src/infra/metrics/normalize-metric-reason.util';
 import { PaymentAbandonmentService } from './payment-abandonment.service';
+import { PaymentPendingRollbackService } from './payment-pending-rollback.service';
 import { canStartCheckoutPayment } from '../domain/payment-booking.policy';
 import {
   hasActivePaymentSession,
   isAbandonableTransactionStatus,
 } from '../domain/payment-transaction.policy';
-import { cancelTransactionIfAbandonable } from '../utils/transaction-state.util';
+import { mergePaymentProviderMeta } from '../types/payment-provider-meta.types';
 
 @Injectable()
 export class PaymentService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly paymentProviderService: PaymentProviderService,
-    private readonly s3Service: S3Service,
     private readonly metrics: MetricsService,
     private readonly logger: Logger,
     private readonly bookingExpirationService: BookingExpirationService,
     private readonly paymentAbandonmentService: PaymentAbandonmentService,
+    private readonly paymentPendingRollback: PaymentPendingRollbackService,
   ) {}
 
   async createPayment(params: {
@@ -86,10 +85,7 @@ export class PaymentService {
             where: { bookingId: payableBooking.id },
           });
 
-          if (
-            existingTransaction &&
-            hasActivePaymentSession(existingTransaction.status)
-          ) {
+          if (existingTransaction && hasActivePaymentSession(existingTransaction.status)) {
             throw new BadRequestException('Payment already initiated');
           }
 
@@ -163,11 +159,23 @@ export class PaymentService {
           externalId: payment.externalId,
         };
 
+        await this.recordPendingProviderSession(
+          transaction.id,
+          payment.externalId,
+          transaction.providerMeta,
+        );
+
         await this.prisma.transaction.update({
           where: { id: transaction.id },
           data: {
             externalId: payment.externalId,
-            providerMeta: payment.meta as Prisma.InputJsonValue,
+            providerMeta: mergePaymentProviderMeta(transaction.providerMeta, {
+              pendingProviderSessionId: payment.externalId,
+              pendingProviderSessionRecordedAt: new Date().toISOString(),
+              ...(payment.meta && typeof payment.meta === 'object'
+                ? (payment.meta as Record<string, unknown>)
+                : {}),
+            }),
           },
         });
 
@@ -185,7 +193,11 @@ export class PaymentService {
           redirectUrl: payment.redirectUrl,
         };
       } catch (providerError) {
-        await this.rollbackPendingPayment(booking.id, transaction.id, providerSession);
+        await this.paymentPendingRollback.rollbackPendingPayment(
+          booking.id,
+          transaction.id,
+          providerSession,
+        );
         throw providerError;
       }
     } catch (e) {
@@ -212,50 +224,7 @@ export class PaymentService {
       return;
     }
 
-    await this.rollbackPendingPayment(bookingId, transaction.id);
-  }
-
-  private async rollbackPendingPayment(
-    bookingId: string,
-    transactionId: string,
-    providerSession?: { provider: PaymentProvider; externalId: string },
-  ): Promise<void> {
-    const transaction = await this.prisma.transaction.findUnique({
-      where: { id: transactionId },
-    });
-
-    if (!transaction || !isAbandonableTransactionStatus(transaction.status)) {
-      return;
-    }
-
-    const provider = providerSession?.provider ?? transaction.provider;
-    const externalId = providerSession?.externalId ?? transaction.externalId;
-
-    const rolledBack = await this.prisma.$transaction(async (tx) => {
-      const canceled = await cancelTransactionIfAbandonable(tx, transactionId);
-      if (!canceled) {
-        return false;
-      }
-
-      await tx.booking.updateMany({
-        where: {
-          id: bookingId,
-          status: BookingStatus.PAYMENT_PENDING,
-        },
-        data: { status: BookingStatus.SEATS_SELECTED },
-      });
-
-      return true;
-    });
-
-    if (rolledBack && externalId) {
-      await this.paymentAbandonmentService.cancelPendingPaymentAtProviderBestEffort({
-        id: transactionId,
-        status: transaction.status,
-        provider,
-        externalId,
-      });
-    }
+    await this.paymentPendingRollback.rollbackPendingPayment(bookingId, transaction.id);
   }
 
   async cancelPendingPaymentAtProviderBestEffort(transaction: {
@@ -265,6 +234,22 @@ export class PaymentService {
     id: string;
   }): Promise<void> {
     return this.paymentAbandonmentService.cancelPendingPaymentAtProviderBestEffort(transaction);
+  }
+
+  private async recordPendingProviderSession(
+    transactionId: string,
+    externalId: string,
+    providerMeta: unknown,
+  ): Promise<void> {
+    await this.prisma.transaction.update({
+      where: { id: transactionId },
+      data: {
+        providerMeta: mergePaymentProviderMeta(providerMeta, {
+          pendingProviderSessionId: externalId,
+          pendingProviderSessionRecordedAt: new Date().toISOString(),
+        }),
+      },
+    });
   }
 
   async resumePayment(params: {
@@ -380,105 +365,34 @@ export class PaymentService {
         externalId: payment.externalId,
       };
 
+      await this.recordPendingProviderSession(
+        transaction.id,
+        payment.externalId,
+        transaction.providerMeta,
+      );
+
       await this.prisma.transaction.update({
         where: { id: transaction.id },
         data: {
           externalId: payment.externalId,
-          providerMeta: payment.meta as Prisma.InputJsonValue,
+          providerMeta: mergePaymentProviderMeta(transaction.providerMeta, {
+            pendingProviderSessionId: payment.externalId,
+            pendingProviderSessionRecordedAt: new Date().toISOString(),
+            ...(payment.meta && typeof payment.meta === 'object'
+              ? (payment.meta as Record<string, unknown>)
+              : {}),
+          }),
         },
       });
 
       return { redirectUrl: payment.redirectUrl };
     } catch (providerError) {
-      await this.rollbackPendingPayment(bookingId, transaction.id, providerSession);
-      throw providerError;
-    }
-  }
-
-  async getTransactionStatus(id: string, userId: string) {
-    const tx = await this.prisma.transaction.findFirst({
-      where: { id, userId },
-      include: {
-        booking: {
-          include: {
-            user: true,
-            travelers: true,
-            tickets: true,
-            seatAssignments: {
-              include: {
-                seat: true,
-              },
-            },
-          },
-        },
-      },
-    });
-
-    if (!tx) {
-      throw new NotFoundException('Transaction not found');
-    }
-
-    const booking = tx.booking;
-
-    const tickets = booking?.tickets?.length
-      ? await Promise.all(booking.tickets.map((ticket) => this.mapTicketWithUrls(ticket)))
-      : [];
-
-    const seatAssignmentsByTraveler = new Map(
-      booking?.seatAssignments?.map((assignment) => [
-        assignment.travelerId,
-        assignment.seat?.seatNumber ?? null,
-      ]) ?? [],
-    );
-
-    return PaymentMapper.toTransactionStatusResponse(tx, tickets, seatAssignmentsByTraveler);
-  }
-
-  private async mapTicketWithUrls(ticket: {
-    id: string;
-    travelerId: string;
-    ticketNumber: string;
-    status: string;
-    pdfKey: string;
-  }) {
-    try {
-      const [previewUrl, downloadUrl] = await Promise.all([
-        this.s3Service.getDownloadUrl(ticket.pdfKey, {
-          disposition: 'inline',
-          fileName: `${ticket.ticketNumber}.pdf`,
-        }),
-        this.s3Service.getDownloadUrl(ticket.pdfKey, {
-          disposition: 'attachment',
-          fileName: `${ticket.ticketNumber}.pdf`,
-        }),
-      ]);
-
-      return {
-        id: ticket.id,
-        travelerId: ticket.travelerId,
-        ticketNumber: ticket.ticketNumber,
-        status: ticket.status,
-        previewUrl,
-        downloadUrl,
-      };
-    } catch (error: unknown) {
-      this.logger.warn(
-        {
-          err: error instanceof Error ? error : String(error),
-          ticketId: ticket.id,
-          ticketNumber: ticket.ticketNumber,
-        },
-        'Failed to generate ticket download URLs',
+      await this.paymentPendingRollback.rollbackPendingPayment(
+        bookingId,
+        transaction.id,
+        providerSession,
       );
-
-      return {
-        id: ticket.id,
-        travelerId: ticket.travelerId,
-        ticketNumber: ticket.ticketNumber,
-        status: ticket.status,
-        previewUrl: null,
-        downloadUrl: null,
-      };
+      throw providerError;
     }
   }
 }

@@ -1,6 +1,5 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import { PaymentService } from './services/payment.service';
-import { S3Service } from 'src/infra/storage/s3.service';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { PaymentProviderService } from './services/payment-provider.service';
 import { MetricsService } from 'src/infra/metrics/metrics.service';
@@ -9,6 +8,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Logger } from 'nestjs-pino';
 import { BookingExpirationService } from '../bookings/services/booking-expiration.service';
 import { PaymentAbandonmentService } from './services/payment-abandonment.service';
+import { PaymentPendingRollbackService } from './services/payment-pending-rollback.service';
 
 const mockPrismaService = {
   booking: {
@@ -25,10 +25,6 @@ const mockPrismaService = {
   $transaction: jest.fn(),
 };
 
-const mockS3Service = {
-  getDownloadUrl: jest.fn(),
-};
-
 const mockPaymentProviderService = {
   get: jest.fn(),
   cancelPendingPayment: jest.fn(),
@@ -38,6 +34,10 @@ const mockPaymentProviderService = {
 const mockPaymentAbandonmentService = {
   cancelPendingPaymentAtProviderBestEffort: jest.fn().mockResolvedValue(undefined),
   abandonPayment: jest.fn().mockResolvedValue(true),
+};
+
+const mockPaymentPendingRollback = {
+  rollbackPendingPayment: jest.fn().mockResolvedValue(undefined),
 };
 
 const mockMetricsService = {
@@ -89,7 +89,6 @@ describe('PaymentService', () => {
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: PaymentProviderService, useValue: mockPaymentProviderService },
         { provide: MetricsService, useValue: mockMetricsService },
-        { provide: S3Service, useValue: mockS3Service },
         { provide: Logger, useValue: { warn: jest.fn(), log: jest.fn() } },
         {
           provide: BookingExpirationService,
@@ -98,6 +97,10 @@ describe('PaymentService', () => {
         {
           provide: PaymentAbandonmentService,
           useValue: mockPaymentAbandonmentService,
+        },
+        {
+          provide: PaymentPendingRollbackService,
+          useValue: mockPaymentPendingRollback,
         },
       ],
     }).compile();
@@ -214,13 +217,25 @@ describe('PaymentService', () => {
       idempotencyKey: mockTransaction.idempotencyKey,
       provider: mockTransaction.provider,
     });
-    expect(mockPrismaService.transaction.update).toHaveBeenCalledWith({
-      where: { id: mockTransaction.id },
-      data: {
-        externalId: 'external_1',
-        providerMeta: { session: 'data' },
-      },
-    });
+    expect(mockPrismaService.transaction.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: mockTransaction.id },
+        data: expect.objectContaining({
+          providerMeta: expect.objectContaining({
+            pendingProviderSessionId: 'external_1',
+          }),
+        }),
+      }),
+    );
+    expect(mockPrismaService.transaction.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: mockTransaction.id },
+        data: expect.objectContaining({
+          externalId: 'external_1',
+          providerMeta: expect.objectContaining({ session: 'data' }),
+        }),
+      }),
+    );
     expect(mockMetricsService.recordPayment).toHaveBeenCalledWith(
       PaymentProvider.STRIPE,
       'initiated',
@@ -266,10 +281,12 @@ describe('PaymentService', () => {
       }),
     ).rejects.toThrow('provider failure');
 
-    expect(
-      mockPaymentAbandonmentService.cancelPendingPaymentAtProviderBestEffort,
-    ).not.toHaveBeenCalled();
-    expect(mockPrismaService.$transaction).toHaveBeenCalledTimes(2);
+    expect(mockPaymentPendingRollback.rollbackPendingPayment).toHaveBeenCalledWith(
+      mockBooking.id,
+      mockTransaction.id,
+      undefined,
+    );
+    expect(mockPrismaService.$transaction).toHaveBeenCalledTimes(1);
     expect(mockMetricsService.recordPaymentFailure).toHaveBeenCalledWith(
       PaymentProvider.STRIPE,
       'provider_error',
@@ -319,47 +336,26 @@ describe('PaymentService', () => {
       }),
     ).rejects.toThrow('db update failed');
 
-    expect(
-      mockPaymentAbandonmentService.cancelPendingPaymentAtProviderBestEffort,
-    ).toHaveBeenCalledWith({
-      id: mockTransaction.id,
-      status: TransactionStatus.PENDING,
-      provider: PaymentProvider.STRIPE,
-      externalId: 'cs_test_1',
-    });
-    expect(mockPrismaService.$transaction).toHaveBeenCalledTimes(2);
+    expect(mockPaymentPendingRollback.rollbackPendingPayment).toHaveBeenCalledWith(
+      mockBooking.id,
+      mockTransaction.id,
+      {
+        provider: PaymentProvider.STRIPE,
+        externalId: 'cs_test_1',
+      },
+    );
+    expect(mockPrismaService.$transaction).toHaveBeenCalledTimes(1);
   });
 
-  it('cancels provider session when rolling back pending payment for booking', async () => {
-    mockPrismaService.transaction.findFirst.mockResolvedValue({
-      ...mockTransaction,
-      externalId: 'cs_test_1',
-    });
-    mockPrismaService.transaction.findUnique.mockResolvedValue({
-      ...mockTransaction,
-      externalId: 'cs_test_1',
-    });
-    mockPrismaService.$transaction.mockImplementation(async (callback) =>
-      callback({
-        transaction: {
-          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
-        },
-        booking: {
-          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
-        },
-      }),
-    );
+  it('delegates rollback to PaymentPendingRollbackService', async () => {
+    mockPrismaService.transaction.findFirst.mockResolvedValue(mockTransaction);
 
     await service.rollbackPendingPaymentForBooking(mockBooking.id, mockBooking.userId);
 
-    expect(
-      mockPaymentAbandonmentService.cancelPendingPaymentAtProviderBestEffort,
-    ).toHaveBeenCalledWith({
-      id: mockTransaction.id,
-      status: TransactionStatus.PENDING,
-      provider: PaymentProvider.STRIPE,
-      externalId: 'cs_test_1',
-    });
+    expect(mockPaymentPendingRollback.rollbackPendingPayment).toHaveBeenCalledWith(
+      mockBooking.id,
+      mockTransaction.id,
+    );
   });
 
   it('should throw if payment already initiated', async () => {
@@ -434,84 +430,6 @@ describe('PaymentService', () => {
     ).rejects.toThrow('provider down');
   });
 
-  it('returns ticket urls when S3 is available', async () => {
-    mockPrismaService.transaction.findFirst.mockResolvedValue({
-      id: 'tx_1',
-      status: TransactionStatus.SUCCEED,
-      externalId: 'ext_1',
-      bookingId: 'booking_1',
-      booking: {
-        id: 'booking_1',
-        status: BookingStatus.TICKETED,
-        pnrLocator: 'PNR123',
-        snapshot: {},
-        user: { email: 'user@example.com' },
-        travelers: [],
-        tickets: [
-          {
-            id: 'ticket_1',
-            travelerId: 'trav_1',
-            ticketNumber: 'T001',
-            status: 'ISSUED',
-            pdfKey: 'tickets/T001.pdf',
-          },
-        ],
-      },
-    });
-    mockS3Service.getDownloadUrl
-      .mockResolvedValueOnce('https://s3.test/preview.pdf')
-      .mockResolvedValueOnce('https://s3.test/download.pdf');
-
-    const result = await service.getTransactionStatus('tx_1', 'user_1');
-
-    expect(result.booking?.tickets[0]).toEqual({
-      id: 'ticket_1',
-      travelerId: 'trav_1',
-      ticketNumber: 'T001',
-      status: 'ISSUED',
-      previewUrl: 'https://s3.test/preview.pdf',
-      downloadUrl: 'https://s3.test/download.pdf',
-    });
-  });
-
-  it('returns null ticket urls when S3 is unavailable', async () => {
-    mockPrismaService.transaction.findFirst.mockResolvedValue({
-      id: 'tx_1',
-      status: TransactionStatus.SUCCEED,
-      externalId: 'ext_1',
-      bookingId: 'booking_1',
-      booking: {
-        id: 'booking_1',
-        status: BookingStatus.TICKETED,
-        pnrLocator: 'PNR123',
-        snapshot: {},
-        user: { email: 'user@example.com' },
-        travelers: [],
-        tickets: [
-          {
-            id: 'ticket_1',
-            travelerId: 'trav_1',
-            ticketNumber: 'T001',
-            status: 'ISSUED',
-            pdfKey: 'tickets/T001.pdf',
-          },
-        ],
-      },
-    });
-    mockS3Service.getDownloadUrl.mockRejectedValue(new Error('S3 unavailable'));
-
-    const result = await service.getTransactionStatus('tx_1', 'user_1');
-
-    expect(result.booking?.tickets[0]).toEqual({
-      id: 'ticket_1',
-      travelerId: 'trav_1',
-      ticketNumber: 'T001',
-      status: 'ISSUED',
-      previewUrl: null,
-      downloadUrl: null,
-    });
-  });
-
   describe('resumePayment', () => {
     const resumeParams = {
       bookingId: mockBooking.id,
@@ -560,6 +478,10 @@ describe('PaymentService', () => {
         .mockResolvedValueOnce({
           ...pendingTransaction,
           idempotencyKey: 'idem-2',
+        })
+        .mockResolvedValueOnce({
+          ...pendingTransaction,
+          providerMeta: { pendingProviderSessionId: 'ext_new' },
         })
         .mockResolvedValueOnce({
           ...pendingTransaction,
