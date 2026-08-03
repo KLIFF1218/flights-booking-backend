@@ -3,7 +3,7 @@ import { Currency, SeatType } from '@prisma/client';
 import { SeatOption } from '../interfaces/seat-options';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { FlightOffer } from '../interfaces/flight-offers.interface';
-import { resolveSeatPriceInCurrency } from 'src/modules/seatmaps/utils/seat-price.util';
+import { resolveSeatPriceInCurrency } from 'src/shared/pricing/seat-fee.catalog';
 
 function dedupeSeatOptions(seats: SeatOption[]): SeatOption[] {
   const seen = new Set<string>();

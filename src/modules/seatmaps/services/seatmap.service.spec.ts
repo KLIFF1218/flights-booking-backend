@@ -132,10 +132,11 @@ describe('SeatMapsService', () => {
     await expect(service.getSeatMap(dto)).rejects.toThrow(NotFoundException);
   });
 
-  it('getSeatMapByOffer validates offer before building seat map', async () => {
+  it('getSeatMapByOffer delegates to getSeatMap without a second offer lookup', async () => {
     searchStore.getOffer.mockResolvedValueOnce(null);
 
     await expect(service.getSeatMapByOffer(dto)).rejects.toThrow(NotFoundException);
+    expect(searchStore.getOffer).toHaveBeenCalledTimes(1);
     expect(searchStore.saveSeatMap).not.toHaveBeenCalled();
   });
 
@@ -160,13 +161,62 @@ describe('SeatMapsService', () => {
     );
   });
 
-  it('returns unavailable when flight instance has no seats', async () => {
+  it('returns unavailable when every segment flight instance has no seats', async () => {
     prisma.flightInstance.findMany.mockResolvedValue([buildFlightInstance({ seats: [] })]);
 
     await expect(service.getSeatMap(dto)).resolves.toEqual({
       unavailable: true,
       seatMaps: [],
     });
+  });
+
+  it('skips segments without seats and returns seat maps for configured segments', async () => {
+    searchStore.getOffer.mockResolvedValue({
+      ...baseOffer,
+      itineraries: [
+        {
+          segments: [
+            { id: 'seg-1', flightInstanceId: 'fi-1' },
+            { id: 'seg-2', flightInstanceId: 'fi-2' },
+          ],
+        },
+      ],
+    });
+    prisma.flightInstance.findMany.mockResolvedValue([
+      buildFlightInstance(),
+      { ...buildFlightInstance(), id: 'fi-2', seats: [] },
+    ]);
+
+    const result = await service.getSeatMap(dto);
+
+    expect(result.unavailable).toBe(false);
+    expect(result.seatMaps).toHaveLength(1);
+    expect(result.seatMaps[0].segmentId).toBe('seg-1');
+  });
+
+  it('filters seat holds and assignments by offer segment ids in prisma query', async () => {
+    await service.getSeatMap(dto);
+
+    expect(prisma.flightInstance.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: expect.objectContaining({
+          seats: expect.objectContaining({
+            include: expect.objectContaining({
+              seatHolds: expect.objectContaining({
+                where: expect.objectContaining({
+                  segmentId: { in: ['seg-1'] },
+                }),
+              }),
+              seatAssignments: expect.objectContaining({
+                where: expect.objectContaining({
+                  segmentId: { in: ['seg-1'] },
+                }),
+              }),
+            }),
+          }),
+        }),
+      }),
+    );
   });
 
   it('throws ConflictException when aircraft layout is missing', async () => {

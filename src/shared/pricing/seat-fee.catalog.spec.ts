@@ -10,9 +10,9 @@ import {
   deriveSeatAttributesFromRow,
   resolveSeatPrice,
   resolveSeatPriceInCurrency,
-} from './seat-price.util';
+} from './seat-fee.catalog';
 
-describe('seat-price.util', () => {
+describe('seat-fee.catalog', () => {
   beforeEach(() => {
     setCurrencyRates({ USD: 1, EUR: 0.92, RUB: 90 });
   });

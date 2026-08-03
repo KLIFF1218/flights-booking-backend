@@ -1,4 +1,5 @@
 import type { SeatType as PrismaSeatType } from '@prisma/client';
+import { deriveSeatAttributesFromRow } from '../../../src/shared/pricing/seat-fee.catalog';
 
 export type SeatType = 'WINDOW' | 'AISLE' | 'MIDDLE';
 
@@ -59,14 +60,6 @@ const SCHEMES: Record<number, CabinScheme> = {
     ],
   },
 };
-
-function deriveSeatAttributesFromRow(rowNumber: number) {
-  return {
-    isExitRow: rowNumber === 11,
-    isExtraLegroom: rowNumber === 10 || rowNumber === 11,
-    isPremium: rowNumber <= 3,
-  };
-}
 
 function resolveSeatType(block: string[], index: number): SeatType {
   const isWindow = index === 0 || index === block.length - 1;
