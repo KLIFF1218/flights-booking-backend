@@ -60,13 +60,9 @@ describe('payment-webhook.policy', () => {
   });
 
   it('allows payment abandonment only for payable bookings with abandonable transactions', () => {
-    expect(
-      canAbandonPayment(BookingStatus.PAYMENT_PENDING, TransactionStatus.PENDING),
-    ).toBe(true);
+    expect(canAbandonPayment(BookingStatus.PAYMENT_PENDING, TransactionStatus.PENDING)).toBe(true);
     expect(canAbandonPayment(BookingStatus.PAID, TransactionStatus.PENDING)).toBe(false);
-    expect(canAbandonPayment(BookingStatus.PAYMENT_PENDING, TransactionStatus.SUCCEED)).toBe(
-      false,
-    );
+    expect(canAbandonPayment(BookingStatus.PAYMENT_PENDING, TransactionStatus.SUCCEED)).toBe(false);
   });
 });
 

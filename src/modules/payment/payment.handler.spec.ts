@@ -1,13 +1,11 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { Logger } from 'nestjs-pino';
-import { BookingStatus, EnumTransport, PaymentProvider, TransactionStatus } from '@prisma/client';
+import { BookingStatus, PaymentProvider, TransactionStatus } from '@prisma/client';
 import { PaymentHandler } from './payment.handler';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { OutboxService } from 'src/infra/outbox/outbox.service';
 import { IdempotencyService } from './services/idempotency.service';
-import { SeatReleaseService } from '../bookings/services/seat-release.service';
-import { BookingsCacheService } from '../bookings/services/bookings-cache.service';
 import { PaymentAbandonmentService } from './services/payment-abandonment.service';
 import { PaymentProviderService } from './services/payment-provider.service';
 import { MetricsService } from 'src/infra/metrics/metrics.service';
@@ -16,8 +14,7 @@ import { ConfirmPaymentUseCase } from './use-cases/confirm-payment.use-case';
 import { FailPaymentUseCase } from './use-cases/fail-payment.use-case';
 import { ReconcileLateSuccessUseCase } from './use-cases/reconcile-late-success.use-case';
 import { BookingPaymentLifecycleService } from '../bookings/services/booking-payment-lifecycle.service';
-import { BookingMetricsService } from '../bookings/metrics/booking-metrics.service';
-import { createBookingMetricsMock } from '../bookings/metrics/booking-metrics.mock';
+import { BOOKING_PAYMENT_SEAT_RELEASE_REASON } from '../bookings/constants/booking-seat-lifecycle.constants';
 
 describe('PaymentHandler', () => {
   let handler: PaymentHandler;
@@ -36,11 +33,9 @@ describe('PaymentHandler', () => {
     complete: jest.fn(),
     fail: jest.fn(),
   };
-  const seatReleaseService = {
-    releaseSeatsForBooking: jest.fn(),
-    confirmSeatsForPaidBooking: jest.fn(),
-  };
-  const bookingsCache = {
+  const bookingPaymentLifecycle = {
+    confirmPaid: jest.fn(),
+    cancelUnpaid: jest.fn(),
     invalidateBooking: jest.fn(),
   };
   const paymentAbandonmentService = {
@@ -75,6 +70,11 @@ describe('PaymentHandler', () => {
     status: TransactionStatus.SUCCEED,
   };
 
+  const bookingSnapshot = {
+    offer: { id: 'fi-1', itineraries: [{ segments: [{ flightInstanceId: 'fi-1' }] }] },
+    pricing: { travelers: [{ id: 'tr1' }] },
+  };
+
   const buildTx = (overrides: Record<string, unknown> = {}) => ({
     transaction: {
       findUnique: jest.fn().mockResolvedValue({
@@ -94,19 +94,6 @@ describe('PaymentHandler', () => {
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     booking: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-    seatAssignment: {
-      findMany: jest.fn().mockResolvedValue([{ flightSeatId: 'seat-1' }]),
-    },
-    flightSeat: { updateMany: jest.fn() },
-    seatHold: { deleteMany: jest.fn() },
-    traveler: { count: jest.fn().mockResolvedValue(1) },
-    flightInstance: {
-      findUnique: jest.fn().mockResolvedValue({
-        seatsAvailable: 9,
-        _count: { seats: 10 },
-      }),
-      update: jest.fn(),
-    },
     ...overrides,
   });
 
@@ -114,9 +101,9 @@ describe('PaymentHandler', () => {
     jest.clearAllMocks();
 
     idempotency.tryStart.mockResolvedValue({ id: 'op_1' });
-    seatReleaseService.releaseSeatsForBooking.mockResolvedValue(undefined);
-    seatReleaseService.confirmSeatsForPaidBooking.mockResolvedValue(undefined);
-    bookingsCache.invalidateBooking.mockResolvedValue(undefined);
+    bookingPaymentLifecycle.confirmPaid.mockResolvedValue(true);
+    bookingPaymentLifecycle.cancelUnpaid.mockResolvedValue(true);
+    bookingPaymentLifecycle.invalidateBooking.mockResolvedValue(undefined);
     paymentAbandonmentService.refundLateSuccessBestEffort.mockResolvedValue(undefined);
     paymentAbandonmentService.markLateSuccessReconciliationRecorded.mockResolvedValue(undefined);
     paymentAbandonmentService.markLateSuccessRefundCompleted.mockResolvedValue(undefined);
@@ -130,10 +117,7 @@ describe('PaymentHandler', () => {
         id: 'b1',
         userId: 'u1',
         status: BookingStatus.PAYMENT_PENDING,
-        snapshot: {
-          offer: { id: 'fi-1', itineraries: [{ segments: [{ flightInstanceId: 'fi-1' }] }] },
-          pricing: { travelers: [{ id: 'tr1' }] },
-        },
+        snapshot: bookingSnapshot,
       },
     });
     prisma.$transaction.mockImplementation(async (cb) => cb(buildTx()));
@@ -145,17 +129,14 @@ describe('PaymentHandler', () => {
         ConfirmPaymentUseCase,
         FailPaymentUseCase,
         ReconcileLateSuccessUseCase,
-        BookingPaymentLifecycleService,
         { provide: PrismaService, useValue: prisma },
         { provide: Logger, useValue: logger },
         { provide: OutboxService, useValue: outbox },
         { provide: IdempotencyService, useValue: idempotency },
-        { provide: SeatReleaseService, useValue: seatReleaseService },
-        { provide: BookingsCacheService, useValue: bookingsCache },
+        { provide: BookingPaymentLifecycleService, useValue: bookingPaymentLifecycle },
         { provide: PaymentAbandonmentService, useValue: paymentAbandonmentService },
         { provide: PaymentProviderService, useValue: paymentProviderService },
         { provide: MetricsService, useValue: metrics },
-        { provide: BookingMetricsService, useValue: createBookingMetricsMock() },
       ],
     }).compile();
 
@@ -175,7 +156,7 @@ describe('PaymentHandler', () => {
     );
   });
 
-  it('should process successful payment with outbox and cache invalidation', async () => {
+  it('should process successful payment via booking lifecycle', async () => {
     const tx = buildTx();
     prisma.$transaction.mockImplementation(async (cb) => cb(tx));
 
@@ -188,23 +169,12 @@ describe('PaymentHandler', () => {
       },
       data: { status: TransactionStatus.SUCCEED, externalId: 'p1' },
     });
-    expect(tx.booking.updateMany).toHaveBeenCalledWith({
-      where: { id: 'b1', status: BookingStatus.PAYMENT_PENDING },
-      data: { status: BookingStatus.PAID },
-    });
-    expect(seatReleaseService.confirmSeatsForPaidBooking).toHaveBeenCalledWith('b1', tx);
-    expect(outbox.enqueue).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        topic: expect.stringContaining('booking.paid'),
-        transport: EnumTransport.RABBITMQ,
-      }),
-    );
-    expect(bookingsCache.invalidateBooking).toHaveBeenCalledWith('b1', 'u1');
+    expect(bookingPaymentLifecycle.confirmPaid).toHaveBeenCalledWith(tx, 'b1', expect.any(String));
+    expect(bookingPaymentLifecycle.invalidateBooking).toHaveBeenCalledWith('b1', 'u1');
     expect(idempotency.complete).toHaveBeenCalledWith('op_1');
   });
 
-  it('should process canceled payment and release seats', async () => {
+  it('should process canceled payment via booking lifecycle', async () => {
     const tx = buildTx();
     prisma.$transaction.mockImplementation(async (cb) => cb(tx));
 
@@ -213,16 +183,21 @@ describe('PaymentHandler', () => {
       status: TransactionStatus.CANCELED,
     });
 
-    expect(tx.booking.updateMany).toHaveBeenCalledWith({
-      where: { id: 'b1', status: BookingStatus.PAYMENT_PENDING },
-      data: { status: BookingStatus.CANCELED },
+    expect(tx.transaction.updateMany).toHaveBeenCalledWith({
+      where: { id: 't1', status: TransactionStatus.PENDING },
+      data: { status: TransactionStatus.CANCELED, externalId: 'p1' },
     });
-    expect(seatReleaseService.releaseSeatsForBooking).toHaveBeenCalledWith('b1', tx, 'payment_canceled');
-    expect(tx.flightInstance.update).toHaveBeenCalledWith({
-      where: { id: 'fi-1' },
-      data: { seatsAvailable: 10 },
-    });
-    expect(bookingsCache.invalidateBooking).toHaveBeenCalledWith('b1', 'u1');
+    expect(bookingPaymentLifecycle.cancelUnpaid).toHaveBeenCalledWith(
+      tx,
+      'b1',
+      bookingSnapshot,
+      BOOKING_PAYMENT_SEAT_RELEASE_REASON.PAYMENT_CANCELED,
+    );
+    expect(outbox.enqueue).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ topic: expect.stringContaining('payment.failed') }),
+    );
+    expect(bookingPaymentLifecycle.invalidateBooking).toHaveBeenCalledWith('b1', 'u1');
   });
 
   it('should no-op when transaction already succeeded', async () => {
@@ -282,7 +257,7 @@ describe('PaymentHandler', () => {
         topic: expect.stringContaining('payment.reconciliation.refunded'),
       }),
     );
-    expect(bookingsCache.invalidateBooking).toHaveBeenCalledWith('b1', 'u1');
+    expect(bookingPaymentLifecycle.invalidateBooking).toHaveBeenCalledWith('b1', 'u1');
     expect(idempotency.complete).toHaveBeenCalledWith('op_1');
   });
 
@@ -340,10 +315,7 @@ describe('PaymentHandler', () => {
         id: 'b1',
         userId: 'u1',
         status: BookingStatus.PAYMENT_PENDING,
-        snapshot: {
-          offer: { id: 'fi-1', itineraries: [{ segments: [{ flightInstanceId: 'fi-1' }] }] },
-          pricing: { travelers: [{ id: 'tr1' }] },
-        },
+        snapshot: bookingSnapshot,
       },
     });
     const tx = buildTx({
@@ -377,10 +349,7 @@ describe('PaymentHandler', () => {
       },
       data: { status: TransactionStatus.SUCCEED, externalId: 'p1' },
     });
-    expect(tx.booking.updateMany).toHaveBeenCalledWith({
-      where: { id: 'b1', status: BookingStatus.PAYMENT_PENDING },
-      data: { status: BookingStatus.PAID },
-    });
+    expect(bookingPaymentLifecycle.confirmPaid).toHaveBeenCalled();
     expect(paymentAbandonmentService.refundLateSuccessBestEffort).not.toHaveBeenCalled();
     expect(idempotency.complete).toHaveBeenCalledWith('op_1');
   });
@@ -392,7 +361,7 @@ describe('PaymentHandler', () => {
     expect(idempotency.fail).toHaveBeenCalledWith('op_1');
   });
 
-  it('should process failed payment and release seats', async () => {
+  it('should process failed payment via booking lifecycle', async () => {
     const tx = buildTx();
     prisma.$transaction.mockImplementation(async (cb) => cb(tx));
 
@@ -405,15 +374,12 @@ describe('PaymentHandler', () => {
       where: { id: 't1', status: TransactionStatus.PENDING },
       data: { status: TransactionStatus.FAILED, externalId: 'p1' },
     });
-    expect(tx.booking.updateMany).toHaveBeenCalledWith({
-      where: { id: 'b1', status: BookingStatus.PAYMENT_PENDING },
-      data: { status: BookingStatus.CANCELED },
-    });
-    expect(seatReleaseService.releaseSeatsForBooking).toHaveBeenCalledWith('b1', tx, 'payment_failed');
-    expect(tx.flightInstance.update).toHaveBeenCalledWith({
-      where: { id: 'fi-1' },
-      data: { seatsAvailable: 10 },
-    });
-    expect(bookingsCache.invalidateBooking).toHaveBeenCalledWith('b1', 'u1');
+    expect(bookingPaymentLifecycle.cancelUnpaid).toHaveBeenCalledWith(
+      tx,
+      'b1',
+      bookingSnapshot,
+      BOOKING_PAYMENT_SEAT_RELEASE_REASON.PAYMENT_FAILED,
+    );
+    expect(bookingPaymentLifecycle.invalidateBooking).toHaveBeenCalledWith('b1', 'u1');
   });
 });

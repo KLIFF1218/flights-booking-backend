@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { PaymentProvider, TransactionStatus } from '@prisma/client';
+import { PaymentProvider } from '@prisma/client';
 import { PaymentProviderService } from '../services/payment-provider.service';
-import { isAbandonableTransactionStatus } from '../utils/transaction-state.util';
 
 export type PaymentPendingCancelOutboxPayload = {
   transactionId: string;

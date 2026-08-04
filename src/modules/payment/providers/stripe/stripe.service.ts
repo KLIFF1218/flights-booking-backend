@@ -2,7 +2,10 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from 'nestjs-pino';
 import Stripe, { Checkout } from 'stripe';
-import { PaymentProviderAdapter } from '../../interfaces/payment.provider.interface';
+import {
+  PaymentProviderAdapter,
+  type PaymentWebhookIngressContext,
+} from '../../interfaces/payment.provider.interface';
 import { PaymentWebhookResult } from '../../interfaces/payment-webhook-result.dto';
 import { Currency, PaymentProvider, TransactionStatus } from '@prisma/client';
 import type { StripePaymentIntentObject, StripeWebhookEvent } from './stripe-webhook.types';
@@ -126,13 +129,27 @@ export class StripeService implements PaymentProviderAdapter {
     );
   }
 
+  /** @deprecated Prefer PaymentProviderService.parseWebhookIngress */
   async parseEvent(rawBody: Buffer, signature: string): Promise<StripeWebhookEvent> {
+    return this.parseWebhookIngress({ rawBody, stripeSignature: signature });
+  }
+
+  parseWebhookIngress(context: PaymentWebhookIngressContext): Promise<StripeWebhookEvent> {
+    const rawBody = context.rawBody;
+    const signature = context.stripeSignature;
+
+    if (!rawBody || !signature) {
+      throw new BadRequestException('Stripe webhook requires raw body and signature');
+    }
+
     try {
-      return this.getStripeClient().webhooks.constructEvent(
-        rawBody,
-        signature,
-        this.getWebhookSecret(),
-      ) as StripeWebhookEvent;
+      return Promise.resolve(
+        this.getStripeClient().webhooks.constructEvent(
+          rawBody,
+          signature,
+          this.getWebhookSecret(),
+        ) as StripeWebhookEvent,
+      );
     } catch (err: unknown) {
       this.logger.error(
         { err: err instanceof Error ? err : String(err) },
@@ -168,19 +185,11 @@ export class StripeService implements PaymentProviderAdapter {
       }
 
       case 'payment_intent.succeeded': {
-        const pi = event.data.object as StripePaymentIntentObject;
-        const transactionId = pi.metadata?.transactionId;
-        const bookingId = pi.metadata?.bookingId;
-        if (!transactionId || !bookingId) return null;
-        return {
-          transactionId,
-          bookingId,
-          paymentId: pi.id,
-          provider: PaymentProvider.STRIPE,
-          eventId: event.id,
-          status: TransactionStatus.SUCCEED,
-          method: 'card',
-        };
+        this.logger.log(
+          { eventId: event.id, type: event.type },
+          'Ignoring Stripe payment_intent.succeeded for Checkout flow',
+        );
+        return null;
       }
 
       case 'payment_intent.payment_failed': {

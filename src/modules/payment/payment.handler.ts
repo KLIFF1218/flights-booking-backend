@@ -9,7 +9,10 @@ import { runSafely } from 'src/common/utils/safe-metrics.util';
 import { finalizeTransactionIfPending } from './utils/transaction-state.util';
 import { BookingPaymentLifecycleService } from '../bookings/services/booking-payment-lifecycle.service';
 import { PaymentProviderService } from './services/payment-provider.service';
-import { PAYMENT_WEBHOOK_IDEMPOTENCY_OPERATION } from './constants/payment-idempotency.constants';
+import {
+  buildPaymentWebhookIdempotencyKey,
+  PAYMENT_WEBHOOK_IDEMPOTENCY_OPERATION,
+} from './constants/payment-idempotency.constants';
 import { WEBHOOK_PROCESSING_OUTCOME } from './constants/payment-webhook.constants';
 import {
   shouldIgnoreWebhookAsAlreadyFinalized,
@@ -47,14 +50,16 @@ export class PaymentHandler {
 
     runSafely(() => this.metrics.recordWebhookReceived(provider));
 
+    const idempotencyKey = buildPaymentWebhookIdempotencyKey(transactionId, status);
+
     const operation = await this.idempotency.tryStart(
       provider,
-      eventId,
+      idempotencyKey,
       PAYMENT_WEBHOOK_IDEMPOTENCY_OPERATION,
     );
 
     if (!operation) {
-      this.logger.warn({ provider, eventId }, 'Webhook already processed');
+      this.logger.warn({ provider, eventId, idempotencyKey }, 'Webhook already processed');
       runSafely(() => {
         this.metrics.recordPaymentIdempotencyConflict(provider);
         this.metrics.recordWebhookIgnored(provider, 'duplicate');
@@ -91,9 +96,7 @@ export class PaymentHandler {
         return;
       }
 
-      if (
-        shouldReconcileLateSuccess(status, transaction.status, transaction.booking.status)
-      ) {
+      if (shouldReconcileLateSuccess(status, transaction.status, transaction.booking.status)) {
         const sideEffects = await this.reconcileLateSuccessUseCase.execute({
           transaction,
           command,

@@ -7,9 +7,13 @@ export interface PaymentProviderMeta {
   lateSuccessReconciliationRecordedAt?: string;
   ticketingFailedRefundCompleted?: boolean;
   ticketingFailedInventoryReleased?: boolean;
+  ticketingCompensationRecorded?: boolean;
+  ticketingCompensationRecordedAt?: string;
   ticketingFailedReason?: string;
   ticketingFailedRefundedAt?: string;
   ticketingFailedAt?: string;
+  pendingProviderSessionId?: string;
+  pendingProviderSessionRecordedAt?: string;
 }
 
 export function parsePaymentProviderMeta(raw: unknown): PaymentProviderMeta {

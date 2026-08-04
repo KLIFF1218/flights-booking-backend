@@ -8,10 +8,13 @@ describe('payment-provider-meta.types', () => {
 
   it('merges provider meta patches', () => {
     expect(
-      mergePaymentProviderMeta({ lateSuccessRefunded: false }, {
-        lateSuccessRefunded: true,
-        lateSuccessRefundedAt: '2026-01-01T00:00:00.000Z',
-      }),
+      mergePaymentProviderMeta(
+        { lateSuccessRefunded: false },
+        {
+          lateSuccessRefunded: true,
+          lateSuccessRefundedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ),
     ).toEqual({
       lateSuccessRefunded: true,
       lateSuccessRefundedAt: '2026-01-01T00:00:00.000Z',

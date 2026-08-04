@@ -11,7 +11,7 @@ import {
 } from '@nestjs/swagger';
 import { Authorized, Protected, Roles } from 'src/common/decorators';
 import { Role } from '@prisma/client';
-import { PaymentService } from '../services/payment.service';
+import { PaymentTransactionQueryService } from '../services/payment-transaction-query.service';
 import { TransactionStatusResponseDto } from '../dtos/transaction-status-response.dto';
 
 @ApiTags('Payments')
@@ -20,7 +20,7 @@ import { TransactionStatusResponseDto } from '../dtos/transaction-status-respons
 @Roles(Role.USER, Role.ADMIN)
 @Controller({ path: 'payment', version: '1' })
 export class PaymentController {
-  constructor(private readonly paymentService: PaymentService) {}
+  constructor(private readonly paymentTransactionQuery: PaymentTransactionQueryService) {}
 
   @Get('transaction/:id')
   @ApiOperation({ summary: 'Get transaction status' })
@@ -35,6 +35,6 @@ export class PaymentController {
     @Param('id') id: string,
     @Authorized('id') userId: string,
   ): Promise<TransactionStatusResponseDto> {
-    return this.paymentService.getTransactionStatus(id, userId);
+    return this.paymentTransactionQuery.getTransactionStatus(id, userId);
   }
 }

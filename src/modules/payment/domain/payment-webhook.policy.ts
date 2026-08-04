@@ -1,8 +1,5 @@
-import { BookingStatus, TransactionStatus } from '@prisma/client';
-import {
-  isBookingExpiredOrCanceled,
-  isBookingPaymentPending,
-} from './payment-booking.policy';
+import { type BookingStatus, TransactionStatus } from '@prisma/client';
+import { isBookingExpiredOrCanceled, isBookingPaymentPending } from './payment-booking.policy';
 import {
   isAbandonableTransactionStatus,
   isTransactionTerminalFailure,
@@ -21,7 +18,9 @@ export function shouldReconcileLateSuccess(
   );
 }
 
-export function shouldIgnoreWebhookAsAlreadySucceeded(transactionStatus: TransactionStatus): boolean {
+export function shouldIgnoreWebhookAsAlreadySucceeded(
+  transactionStatus: TransactionStatus,
+): boolean {
   return isTransactionSucceeded(transactionStatus);
 }
 

@@ -1,6 +1,12 @@
 import type { Currency, PaymentProvider } from '@prisma/client';
 import type { PaymentWebhookResult } from './payment-webhook-result.dto';
 
+export interface PaymentWebhookIngressContext {
+  ip?: string;
+  rawBody?: Buffer;
+  stripeSignature?: string;
+}
+
 export interface PaymentCreateParams {
   transactionId: string;
   bookingId: string;
@@ -28,6 +34,10 @@ export interface PaymentProviderAdapter {
 
   /** Two-stage providers (YooKassa): capture after AUTHORIZED is stored locally. */
   captureAuthorizedPayment?(externalId: string): Promise<void>;
+
+  verifyWebhookIngress?(context: PaymentWebhookIngressContext): void;
+
+  parseWebhookIngress?(context: PaymentWebhookIngressContext): Promise<unknown>;
 
   handleWebhook?(payload: unknown): Promise<PaymentWebhookResult | null>;
 }

@@ -31,12 +31,12 @@ describe('payment-transaction.policy', () => {
     expect(
       canTransitionTransactionTo(TransactionStatus.PENDING, TransactionStatus.AUTHORIZED),
     ).toBe(true);
-    expect(
-      canTransitionTransactionTo(TransactionStatus.PENDING, TransactionStatus.SUCCEED),
-    ).toBe(true);
-    expect(
-      canTransitionTransactionTo(TransactionStatus.SUCCEED, TransactionStatus.CANCELED),
-    ).toBe(false);
+    expect(canTransitionTransactionTo(TransactionStatus.PENDING, TransactionStatus.SUCCEED)).toBe(
+      true,
+    );
+    expect(canTransitionTransactionTo(TransactionStatus.SUCCEED, TransactionStatus.CANCELED)).toBe(
+      false,
+    );
   });
 
   it('identifies terminal failure and success states', () => {

@@ -1,5 +1,5 @@
 import { Test, type TestingModule } from '@nestjs/testing';
-import { PaymentProvider, TransactionStatus } from '@prisma/client';
+import { PaymentProvider } from '@prisma/client';
 import { PaymentPendingCancelOutboxHandler } from './payment-pending-cancel.outbox-handler';
 import { PaymentProviderService } from '../services/payment-provider.service';
 

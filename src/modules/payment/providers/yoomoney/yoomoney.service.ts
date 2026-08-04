@@ -9,6 +9,7 @@ import {
 } from 'nestjs-yookassa';
 import { Currency, PaymentProvider, TransactionStatus } from '@prisma/client';
 import ipRangeCheck from 'ip-range-check';
+import type { PaymentWebhookIngressContext } from '../../interfaces/payment.provider.interface';
 import { PaymentProviderAdapter } from '../../interfaces/payment.provider.interface';
 import { PaymentWebhookResult } from '../../interfaces/payment-webhook-result.dto';
 import { YooKassaWebhookDto } from '../../webhook/dto/yookassa-webhook.dto';
@@ -223,6 +224,14 @@ export class YookassaProvider implements PaymentProviderAdapter {
       method: payload.object.payment_method?.type ?? 'unknown',
       requiresCaptureAfterAuthorize,
     };
+  }
+
+  verifyWebhookIngress(context: PaymentWebhookIngressContext): void {
+    if (!context.ip) {
+      throw new ForbiddenException('Unauthorized webhook source');
+    }
+
+    this.verifyWebhookIp(context.ip);
   }
 
   verifyWebhookIp(ip: string): void {

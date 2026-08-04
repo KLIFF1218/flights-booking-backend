@@ -232,16 +232,24 @@ describe('PaymentAbandonmentService', () => {
 
       await service.compensateTicketingFailure('booking-1', 'PRICING_NOT_FOUND');
 
+      expect(prisma.transaction.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'tx-1' },
+          data: expect.objectContaining({
+            providerMeta: expect.objectContaining({
+              ticketingCompensationRecorded: true,
+            }),
+          }),
+        }),
+      );
       expect(paymentProviderService.refundSucceededPayment).toHaveBeenCalledWith(
         PaymentProvider.STRIPE,
         'pi_test_1',
         'ticketing-fail-refund-tx-1',
       );
-      expect(bookingPaymentLifecycle.releaseSeatsAndInventoryForTicketingFailure).toHaveBeenCalledWith(
-        expect.any(Object),
-        'booking-1',
-        bookingSnapshot,
-      );
+      expect(
+        bookingPaymentLifecycle.releaseSeatsAndInventoryForTicketingFailure,
+      ).toHaveBeenCalledWith(expect.any(Object), 'booking-1', bookingSnapshot);
       expect(bookingPaymentLifecycle.invalidateBooking).toHaveBeenCalledWith('booking-1', 'user-1');
     });
 
@@ -253,7 +261,18 @@ describe('PaymentAbandonmentService', () => {
         service.compensateTicketingFailure('booking-1', 'PRICING_NOT_FOUND'),
       ).rejects.toThrow('stripe down');
 
-      expect(bookingPaymentLifecycle.releaseSeatsAndInventoryForTicketingFailure).not.toHaveBeenCalled();
+      expect(prisma.transaction.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            providerMeta: expect.objectContaining({
+              ticketingCompensationRecorded: true,
+            }),
+          }),
+        }),
+      );
+      expect(
+        bookingPaymentLifecycle.releaseSeatsAndInventoryForTicketingFailure,
+      ).not.toHaveBeenCalled();
       expect(prisma.$transaction).not.toHaveBeenCalled();
       expect(bookingPaymentLifecycle.invalidateBooking).not.toHaveBeenCalled();
     });
@@ -269,7 +288,9 @@ describe('PaymentAbandonmentService', () => {
       await service.compensateTicketingFailure('booking-1', 'PRICING_NOT_FOUND');
 
       expect(paymentProviderService.refundSucceededPayment).not.toHaveBeenCalled();
-      expect(bookingPaymentLifecycle.releaseSeatsAndInventoryForTicketingFailure).not.toHaveBeenCalled();
+      expect(
+        bookingPaymentLifecycle.releaseSeatsAndInventoryForTicketingFailure,
+      ).not.toHaveBeenCalled();
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
@@ -282,7 +303,9 @@ describe('PaymentAbandonmentService', () => {
       await service.compensateTicketingFailure('booking-1', 'PRICING_NOT_FOUND');
 
       expect(paymentProviderService.refundSucceededPayment).not.toHaveBeenCalled();
-      expect(bookingPaymentLifecycle.releaseSeatsAndInventoryForTicketingFailure).toHaveBeenCalled();
+      expect(
+        bookingPaymentLifecycle.releaseSeatsAndInventoryForTicketingFailure,
+      ).toHaveBeenCalled();
     });
 
     it('fails when paid transaction has no external id', async () => {
@@ -299,7 +322,9 @@ describe('PaymentAbandonmentService', () => {
       ).rejects.toThrow('Ticketing failure refund requires payment external id');
 
       expect(paymentProviderService.refundSucceededPayment).not.toHaveBeenCalled();
-      expect(bookingPaymentLifecycle.releaseSeatsAndInventoryForTicketingFailure).not.toHaveBeenCalled();
+      expect(
+        bookingPaymentLifecycle.releaseSeatsAndInventoryForTicketingFailure,
+      ).not.toHaveBeenCalled();
     });
   });
 });

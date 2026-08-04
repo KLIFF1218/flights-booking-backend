@@ -1,6 +1,8 @@
-import { Currency, PaymentProvider, type Prisma } from '@prisma/client';
+import { Currency, PaymentProvider } from '@prisma/client';
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { Logger } from 'nestjs-pino';
+import type { PaymentWebhookIngressContext } from '../interfaces/payment.provider.interface';
+import type { PaymentWebhookResult } from '../interfaces/payment-webhook-result.dto';
 import { PaymentProviderCreateDto } from '../dtos/payment-provider.create.dto';
 import { PaymentProviderRegistry } from './payment-provider.registry';
 
@@ -66,7 +68,9 @@ export class PaymentProviderService {
     const adapter = this.registry.get(provider);
 
     if (!adapter.captureAuthorizedPayment) {
-      throw new BadRequestException(`Provider ${provider} does not support capture after authorize`);
+      throw new BadRequestException(
+        `Provider ${provider} does not support capture after authorize`,
+      );
     }
 
     await adapter.captureAuthorizedPayment(externalId);
@@ -74,5 +78,45 @@ export class PaymentProviderService {
 
   supportsCaptureAfterAuthorize(provider: PaymentProvider): boolean {
     return typeof this.registry.get(provider).captureAuthorizedPayment === 'function';
+  }
+
+  verifyWebhookIngress(provider: PaymentProvider, context: PaymentWebhookIngressContext): void {
+    const adapter = this.registry.get(provider);
+
+    if (!adapter.verifyWebhookIngress) {
+      throw new BadRequestException(
+        `Provider ${provider} does not support webhook ingress verification`,
+      );
+    }
+
+    adapter.verifyWebhookIngress(context);
+  }
+
+  async parseWebhookIngress(
+    provider: PaymentProvider,
+    context: PaymentWebhookIngressContext,
+  ): Promise<unknown> {
+    const adapter = this.registry.get(provider);
+
+    if (!adapter.parseWebhookIngress) {
+      throw new BadRequestException(
+        `Provider ${provider} does not support webhook ingress parsing`,
+      );
+    }
+
+    return adapter.parseWebhookIngress(context);
+  }
+
+  async handleWebhook(
+    provider: PaymentProvider,
+    payload: unknown,
+  ): Promise<PaymentWebhookResult | null> {
+    const adapter = this.registry.get(provider);
+
+    if (!adapter.handleWebhook) {
+      throw new BadRequestException(`Provider ${provider} does not support webhooks`);
+    }
+
+    return adapter.handleWebhook(payload);
   }
 }

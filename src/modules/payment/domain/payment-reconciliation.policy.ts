@@ -8,6 +8,10 @@ export function isLateSuccessReconciliationRecorded(providerMeta: unknown): bool
   return parsePaymentProviderMeta(providerMeta).lateSuccessReconciliationRecorded === true;
 }
 
+export function isTicketingCompensationRecorded(providerMeta: unknown): boolean {
+  return parsePaymentProviderMeta(providerMeta).ticketingCompensationRecorded === true;
+}
+
 export function hasTicketingRefundCompleted(providerMeta: unknown): boolean {
   return parsePaymentProviderMeta(providerMeta).ticketingFailedRefundCompleted === true;
 }

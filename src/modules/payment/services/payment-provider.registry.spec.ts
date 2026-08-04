@@ -1,7 +1,7 @@
 import { PaymentProvider } from '@prisma/client';
 import { PaymentProviderRegistry } from './payment-provider.registry';
-import { StripeService } from '../providers/stripe/stripe.service';
-import { YookassaProvider } from '../providers/yoomoney/yoomoney.service';
+import type { StripeService } from '../providers/stripe/stripe.service';
+import type { YookassaProvider } from '../providers/yoomoney/yoomoney.service';
 
 describe('PaymentProviderRegistry', () => {
   const stripe = { provider: PaymentProvider.STRIPE } as StripeService;
