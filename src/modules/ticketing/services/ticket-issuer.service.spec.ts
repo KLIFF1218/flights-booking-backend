@@ -1,29 +1,20 @@
 import { EnumTransport, TravelClass } from '@prisma/client';
 import { TicketIssuerService } from './ticket-issuer.service';
-import { type PrismaService } from 'src/infra/db/prisma/prisma.service';
-import { type PdfService } from 'src/infra/pdf/pdf.service';
-import { type S3Service } from 'src/infra/storage/s3.service';
-import { type OutboxService } from 'src/infra/outbox/outbox.service';
+import { type TicketDocumentService } from './ticket-document.service';
+import { type TicketPersistenceService } from './ticket-persistence.service';
 import type { BookingSnapshot } from 'src/modules/bookings/interfaces/booking-snapshot.interface';
 
 describe('TicketIssuerService', () => {
   let service: TicketIssuerService;
 
-  const prisma = {
-    ticket: {
-      findFirst: jest.fn(),
-    },
-    $transaction: jest.fn(),
+  const ticketDocument = {
+    buildTicketPdfKey: jest.fn(),
+    generatePdf: jest.fn(),
+    uploadPdf: jest.fn(),
   };
-  const pdfService = {
-    generateEticket: jest.fn(),
-  };
-  const s3 = {
-    uploadFile: jest.fn(),
-    getDownloadUrl: jest.fn(),
-  };
-  const outbox = {
-    enqueue: jest.fn(),
+  const ticketPersistence = {
+    findTicketsByBookingId: jest.fn(),
+    recordIssuedTicket: jest.fn(),
   };
 
   const traveler = {
@@ -96,56 +87,68 @@ describe('TicketIssuerService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     service = new TicketIssuerService(
-      prisma as unknown as PrismaService,
-      pdfService as unknown as PdfService,
-      s3 as unknown as S3Service,
-      outbox as unknown as OutboxService,
+      ticketDocument as unknown as TicketDocumentService,
+      ticketPersistence as unknown as TicketPersistenceService,
     );
-  });
-
-  it('returns existing ticket without re-uploading pdf', async () => {
-    prisma.ticket.findFirst.mockResolvedValue({
+    ticketDocument.buildTicketPdfKey.mockReturnValue('tickets/booking-1/traveler-1.pdf');
+    ticketDocument.generatePdf.mockResolvedValue(Buffer.from('pdf'));
+    ticketDocument.uploadPdf.mockResolvedValue(undefined);
+    ticketPersistence.findTicketsByBookingId.mockResolvedValue([]);
+    ticketPersistence.recordIssuedTicket.mockResolvedValue({
       id: 'ticket-1',
-      travelerId: 'traveler-1',
       ticketNumber: '555-1234567890',
-      pdfKey: 'tickets/booking-1/traveler-1.pdf',
     });
-    s3.getDownloadUrl.mockResolvedValue('https://example.com/existing.pdf');
-
-    const result = await service.issueForTraveler({
-      bookingId: 'booking-1',
-      pnrLocator: 'ABC123',
-      traveler: traveler as any,
-      snapshot,
-    });
-
-    expect(result).toEqual({
-      travelerId: 'traveler-1',
-      ticketNumber: '555-1234567890',
-      pdfKey: 'tickets/booking-1/traveler-1.pdf',
-    });
-    expect(pdfService.generateEticket).not.toHaveBeenCalled();
-    expect(s3.uploadFile).not.toHaveBeenCalled();
-    expect(s3.getDownloadUrl).not.toHaveBeenCalled();
   });
 
-  it('creates ticket, uploads pdf and enqueues outbox events', async () => {
-    prisma.ticket.findFirst.mockResolvedValue(null);
-    pdfService.generateEticket.mockResolvedValue(Buffer.from('pdf'));
-    s3.uploadFile.mockResolvedValue('tickets/booking-1/traveler-1.pdf');
-    s3.getDownloadUrl.mockResolvedValue('https://example.com/new.pdf');
-
-    const tx = {
-      ticket: {
-        create: jest.fn().mockResolvedValue({
-          id: 'ticket-1',
-          ticketNumber: '555-1234567890',
-        }),
+  it('returns prefetched tickets keyed by traveler id', async () => {
+    ticketPersistence.findTicketsByBookingId.mockResolvedValue([
+      {
+        travelerId: 'traveler-1',
+        ticketNumber: '555-1234567890',
+        pdfKey: 'tickets/booking-1/traveler-1.pdf',
       },
-    };
+    ]);
 
-    prisma.$transaction.mockImplementation(async (callback) => callback(tx));
+    const map = await service.prefetchTicketsByTravelerId('booking-1');
 
+    expect(map.get('traveler-1')).toEqual({
+      travelerId: 'traveler-1',
+      ticketNumber: '555-1234567890',
+      pdfKey: 'tickets/booking-1/traveler-1.pdf',
+    });
+  });
+
+  it('re-uploads pdf for existing ticket without creating a new db row', async () => {
+    const prefetched = new Map([
+      [
+        'traveler-1',
+        {
+          travelerId: 'traveler-1',
+          ticketNumber: '555-1234567890',
+          pdfKey: 'tickets/booking-1/traveler-1.pdf',
+        },
+      ],
+    ]);
+
+    const result = await service.issueForTraveler(
+      {
+        bookingId: 'booking-1',
+        pnrLocator: 'ABC123',
+        traveler: traveler as any,
+        snapshot,
+      },
+      prefetched,
+    );
+
+    expect(ticketPersistence.recordIssuedTicket).not.toHaveBeenCalled();
+    expect(ticketDocument.uploadPdf).toHaveBeenCalledWith(
+      'tickets/booking-1/traveler-1.pdf',
+      Buffer.from('pdf'),
+    );
+    expect(result.pdfKey).toBe('tickets/booking-1/traveler-1.pdf');
+  });
+
+  it('persists ticket before uploading pdf for new travelers', async () => {
     const result = await service.issueForTraveler({
       bookingId: 'booking-1',
       pnrLocator: 'ABC123',
@@ -173,21 +176,18 @@ describe('TicketIssuerService', () => {
       },
     });
 
-    expect(pdfService.generateEticket).toHaveBeenCalled();
-    expect(s3.uploadFile).toHaveBeenCalledWith({
-      key: 'tickets/booking-1/traveler-1.pdf',
-      body: Buffer.from('pdf'),
-      contentType: 'application/pdf',
-    });
-    expect(outbox.enqueue).toHaveBeenCalledTimes(1);
-    expect(outbox.enqueue).toHaveBeenCalledWith(
-      tx,
+    expect(ticketPersistence.recordIssuedTicket).toHaveBeenCalled();
+    expect(ticketDocument.uploadPdf).toHaveBeenCalled();
+    const recordOrder = ticketPersistence.recordIssuedTicket.mock.invocationCallOrder[0];
+    const uploadOrder = ticketDocument.uploadPdf.mock.invocationCallOrder[0];
+    expect(recordOrder).toBeLessThan(uploadOrder);
+    expect(ticketPersistence.recordIssuedTicket).toHaveBeenCalledWith(
       expect.objectContaining({
-        topic: 'ticket.issued',
-        transport: EnumTransport.KAFKA,
+        bookingId: 'booking-1',
+        travelerId: 'traveler-1',
+        pdfKey: 'tickets/booking-1/traveler-1.pdf',
       }),
     );
     expect(result.pdfKey).toBe('tickets/booking-1/traveler-1.pdf');
-    expect(s3.getDownloadUrl).not.toHaveBeenCalled();
   });
 });

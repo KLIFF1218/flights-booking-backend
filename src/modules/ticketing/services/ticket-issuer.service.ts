@@ -1,14 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { EnumTransport, Traveler } from '@prisma/client';
-import { PrismaService } from 'src/infra/db/prisma/prisma.service';
-import { PdfService } from 'src/infra/pdf/pdf.service';
-import { S3Service } from 'src/infra/storage/s3.service';
-import { OutboxService } from 'src/infra/outbox/outbox.service';
+import { Traveler } from '@prisma/client';
 import type { FlightTraveler } from 'src/modules/flights/dtos/flight-pricing.response.dto';
 import type { BookingSnapshot } from 'src/modules/bookings/interfaces/booking-snapshot.interface';
 import { GeneratedTicket } from '../types/ticket.types';
 import { generateTicketNumber } from '../utils/ticket-number.util';
 import { buildEticketDocumentData } from '../utils/eticket-document.util';
+import { TicketDocumentService } from './ticket-document.service';
+import { TicketPersistenceService } from './ticket-persistence.service';
 
 type TravelerWithSeats = Traveler & {
   seatAssignments: Array<{
@@ -32,32 +30,37 @@ export interface IssueTicketParams {
 @Injectable()
 export class TicketIssuerService {
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly pdfService: PdfService,
-    private readonly s3: S3Service,
-    private readonly outbox: OutboxService,
+    private readonly ticketDocument: TicketDocumentService,
+    private readonly ticketPersistence: TicketPersistenceService,
   ) {}
 
-  async issueForTraveler(params: IssueTicketParams): Promise<GeneratedTicket> {
+  async prefetchTicketsByTravelerId(bookingId: string): Promise<Map<string, GeneratedTicket>> {
+    const tickets = await this.ticketPersistence.findTicketsByBookingId(bookingId);
+
+    return new Map(
+      tickets.map((ticket) => [
+        ticket.travelerId,
+        {
+          travelerId: ticket.travelerId,
+          ticketNumber: ticket.ticketNumber,
+          pdfKey: ticket.pdfKey,
+        },
+      ]),
+    );
+  }
+
+  async issueForTraveler(
+    params: IssueTicketParams,
+    prefetchedTickets?: Map<string, GeneratedTicket>,
+  ): Promise<GeneratedTicket> {
     const { bookingId, pnrLocator, traveler, snapshot, travelerPricing, seatSurcharge } = params;
+    const existingTicket = prefetchedTickets?.get(traveler.id);
 
-    const existingTicket = await this.prisma.ticket.findFirst({
-      where: {
-        bookingId,
-        travelerId: traveler.id,
-      },
-    });
-
-    if (existingTicket) {
-      return {
-        travelerId: traveler.id,
-        ticketNumber: existingTicket.ticketNumber,
-        pdfKey: existingTicket.pdfKey,
-      };
-    }
-
-    const ticketNumber = generateTicketNumber();
+    const ticketNumber = existingTicket?.ticketNumber ?? generateTicketNumber();
     const issuedAt = new Date();
+    const fileKey =
+      existingTicket?.pdfKey ?? this.ticketDocument.buildTicketPdfKey(bookingId, traveler.id);
+
     const seatBySegmentId = new Map(
       traveler.seatAssignments.map((assignment) => [
         assignment.segmentId,
@@ -76,47 +79,23 @@ export class TicketIssuerService {
       seatSurcharge,
     });
 
-    const pdfBuffer = await this.pdfService.generateEticket(documentData);
-    const fileKey = `tickets/${bookingId}/${traveler.id}.pdf`;
+    const pdfBuffer = await this.ticketDocument.generatePdf(documentData);
 
-    await this.s3.uploadFile({
-      key: fileKey,
-      body: pdfBuffer,
-      contentType: 'application/pdf',
-    });
-
-    const ticket = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.ticket.create({
-        data: {
-          bookingId,
-          travelerId: traveler.id,
-          ticketNumber,
-          pdfKey: fileKey,
-        },
-      });
-
-      const eventPayload = {
-        ticketId: created.id,
+    if (!existingTicket) {
+      await this.ticketPersistence.recordIssuedTicket({
         bookingId,
         travelerId: traveler.id,
-        ticketNumber: created.ticketNumber,
-        issuedAt: issuedAt.toISOString(),
-      };
-
-      await this.outbox.enqueue(tx, {
-        aggregateId: created.id,
-        aggregateType: 'Ticket',
-        topic: 'ticket.issued',
-        payload: eventPayload,
-        transport: EnumTransport.KAFKA,
+        ticketNumber,
+        pdfKey: fileKey,
+        issuedAt,
       });
+    }
 
-      return created;
-    });
+    await this.ticketDocument.uploadPdf(fileKey, pdfBuffer);
 
     return {
       travelerId: traveler.id,
-      ticketNumber: ticket.ticketNumber,
+      ticketNumber,
       pdfKey: fileKey,
     };
   }

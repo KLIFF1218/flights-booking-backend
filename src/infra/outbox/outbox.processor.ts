@@ -23,7 +23,7 @@ import {
 import {
   TicketingFailedOutboxHandler,
   type TicketingFailedOutboxPayload,
-} from 'src/modules/bookings/handlers/ticketing-failed.outbox-handler';
+} from 'src/modules/ticketing/handlers/ticketing-failed.outbox-handler';
 import {
   CreateCompensationOutboxHandler,
   type CreateCompensationOutboxPayload,

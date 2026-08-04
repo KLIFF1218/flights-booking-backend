@@ -2,8 +2,8 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { Logger } from 'nestjs-pino';
 import { TicketingFailedOutboxHandler } from './ticketing-failed.outbox-handler';
 import { PaymentAbandonmentService } from 'src/modules/payment/services/payment-abandonment.service';
-import { BookingMetricsService } from '../metrics/booking-metrics.service';
-import { createBookingMetricsMock } from '../metrics/booking-metrics.mock';
+import { BookingMetricsService } from 'src/modules/bookings/metrics/booking-metrics.service';
+import { createBookingMetricsMock } from 'src/modules/bookings/metrics/booking-metrics.mock';
 
 describe('TicketingFailedOutboxHandler', () => {
   let handler: TicketingFailedOutboxHandler;

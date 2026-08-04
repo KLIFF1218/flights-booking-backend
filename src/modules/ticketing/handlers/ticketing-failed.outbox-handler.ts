@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Logger } from 'nestjs-pino';
 import { PaymentAbandonmentService } from 'src/modules/payment/services/payment-abandonment.service';
-import { BookingMetricsService } from '../metrics/booking-metrics.service';
+import { BookingMetricsService } from 'src/modules/bookings/metrics/booking-metrics.service';
 
 export type TicketingFailedOutboxPayload = {
   bookingId: string;
