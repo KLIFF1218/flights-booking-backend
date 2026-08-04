@@ -16,7 +16,7 @@ import { isCyclicRoute } from '../utils/route.util';
 import { Airport, FlightStatus } from '@prisma/client';
 import { buildOneWayOffers } from '../utils/offer-builder.util';
 import { buildConnectionLegs, mergeRoundTripLegs } from '../utils/offer-flight-instances.util';
-import { countSeatsRequired } from '../utils/passenger-counts.util';
+import { countSeatsRequired } from 'src/shared/booking/passenger-counts.util';
 import { parseDuration } from '../utils/duration.util';
 import { assertValidRoundTripDirections } from '../utils/validate-search-directions.util';
 import { buildDepartureSearchWindow, matchesLocalDate } from '../utils/timezone-date.util';
@@ -35,21 +35,28 @@ function resolveMaxCachedOffers(limit: number, maxCachedOffers: number): number 
 
 @Injectable()
 export class DbFlightsSearchProvider {
-  private static readonly airportCache = new Map<string, Airport>();
+  private static readonly AIRPORT_CACHE_TTL_MS = 5 * 60 * 1000;
+  private static readonly airportCache = new Map<string, { airport: Airport; expiresAt: number }>();
 
   constructor(private readonly prisma: PrismaService) {}
 
   private async getCachedAirport(code: string): Promise<Airport | null> {
     const cached = DbFlightsSearchProvider.airportCache.get(code);
-    if (cached) return cached;
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.airport;
+    }
 
     const airport = await this.prisma.airport.findUnique({
       where: { iataCode: code },
     });
 
     if (airport) {
-      DbFlightsSearchProvider.airportCache.set(code, airport);
+      DbFlightsSearchProvider.airportCache.set(code, {
+        airport,
+        expiresAt: Date.now() + DbFlightsSearchProvider.AIRPORT_CACHE_TTL_MS,
+      });
     }
+
     return airport;
   }
 

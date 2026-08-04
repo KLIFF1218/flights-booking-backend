@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { BookingStatus, EnumTransport, FlightStatus } from '@prisma/client';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
-import { computeSeatPriceInCurrency } from 'src/modules/seatmaps/utils/seat-price.util';
+import { computeSeatPriceInCurrency } from 'src/shared/pricing/seat-fee.catalog';
 import { UpdateFlightStatusDto, FlightStatusUpdate } from './dtos/update-flight-status.dto';
 import { CreateFlightInstanceDto } from './dtos/create-flight-instance.dto';
 import { GetFlightsQueryDto } from './dtos/get-flights.dto';

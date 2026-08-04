@@ -1,5 +1,5 @@
 import { Currency, Prisma, TravelClass } from '@prisma/client';
-import { computeSeatPrice } from '../../../src/modules/seatmaps/utils/seat-price.util';
+import { computeSeatPrice } from '../../../src/shared/pricing/seat-fee.catalog';
 import { buildFlightFaresFromAdultPrices } from '../../../src/modules/flights/utils/flight-fare-builder.util';
 import type { SeedPrisma } from './prisma-client';
 

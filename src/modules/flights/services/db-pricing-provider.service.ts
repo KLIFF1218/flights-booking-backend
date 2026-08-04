@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { FlightsSearchStore } from './flights-cache.service';
+import { FlightsSearchStore, type CachedSearchContext } from './flights-cache.service';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { FlightPricingResponse, SeatOptionDto } from '../dtos';
 import { mapItinerary } from '../utils/itinerary.mapper';
@@ -10,7 +10,7 @@ import {
   countSeatsRequired,
   normalizePassengerCounts,
   validatePassengerCounts,
-} from '../utils/passenger-counts.util';
+} from 'src/shared/booking/passenger-counts.util';
 import { FlightInstanceWithFares } from '../types/flights.types';
 import { Logger } from 'nestjs-pino';
 import { convertCurrencyWithRates } from '../utils/currency.util';
@@ -20,7 +20,7 @@ import {
   createPricingQuoteMeta,
   PRICING_QUOTE_TTL_SECONDS,
   PRICING_QUOTE_WITH_SEATS_TTL_SECONDS,
-} from '../utils/pricing-quote.util';
+} from 'src/shared/pricing/pricing-quote.util';
 import { CurrencyRatesService } from './currency-rates.service';
 import { flightInstanceInclude } from '../providers/prisma/flight-instance.include';
 import type { FlightInstanceWithRelations } from '../providers/prisma/flight-instance.type';
@@ -38,6 +38,34 @@ import {
 } from '../constants/fare-brand.constants';
 import type { FlightOffer } from '../interfaces/flight-offers.interface';
 
+type PricingOptions = {
+  seats?: SeatOptionDto[];
+  adults?: number;
+  children?: number;
+  infants?: number;
+  seatedInfants?: number;
+  currencyCode?: Currency;
+  lockedFxRates?: Record<string, number>;
+  fareBrand?: FareBrand;
+  bookingId?: string;
+};
+
+type ResolvedPassengers = {
+  adults: number;
+  children: number;
+  infants: number;
+  seatedInfants: number;
+};
+
+type FareComputation = {
+  fareBreakdown: ReturnType<typeof buildFarePriceBreakdown>;
+  seatPrice: number;
+  totalPrice: number;
+  travelerPricings: FlightPricingResponse['travelers'];
+  pricedOffer: FlightOffer;
+  cachedOfferUpdate: FlightOffer;
+};
+
 @Injectable()
 export class DbPricingProvider implements FlightPricingProvider {
   constructor(
@@ -51,73 +79,117 @@ export class DbPricingProvider implements FlightPricingProvider {
   async price(
     searchId: string,
     offerId: string,
-    options?: {
-      seats?: SeatOptionDto[];
-      adults?: number;
-      children?: number;
-      infants?: number;
-      seatedInfants?: number;
-      currencyCode?: Currency;
-      lockedFxRates?: Record<string, number>;
-      fareBrand?: FareBrand;
-      bookingId?: string;
-    },
+    options?: PricingOptions,
   ): Promise<FlightPricingResponse> {
-    const cachedOffer = await this.searchStore.getOfferWithContext(searchId, offerId);
-    if (!cachedOffer) {
-      throw new NotFoundException('Offer not found');
-    }
-
-    const { offer, context: searchContext } = cachedOffer;
-
+    const loaded = await this.loadOfferFromCache(searchId, offerId);
     const fxRates =
       options?.lockedFxRates ?? (await this.currencyRatesService.syncRatesFromRedis());
     const fxRatesAt = new Date().toISOString();
     const convert = (amount: number, from: string, to: string) =>
       convertCurrencyWithRates(amount, from, to, fxRates);
 
-    const offerCurrency = offer.currencyCode ?? offer.price.currency;
-    const targetCurrency = options?.currencyCode ?? offerCurrency;
+    const targetCurrency = options?.currencyCode ?? loaded.offerCurrency;
+    const instances = await this.loadFlightInstances(loaded.offer);
+    const scheduleSnapshot = applyInstanceSchedulesToOffer(loaded.offer, instances.map);
+    const scheduleAwareOffer = scheduleSnapshot.offer;
+    const pricingInstances = instances.pricingInstances;
+    const fareCurrency = this.assertUniformFareCurrency(pricingInstances);
 
-    const pricedOffer = structuredClone(offer);
+    const passengers = await this.resolvePassengers(
+      searchId,
+      offerId,
+      loaded,
+      options,
+      scheduleAwareOffer,
+      pricingInstances,
+    );
 
+    const fareBrand = isFareBrand(options?.fareBrand)
+      ? options.fareBrand
+      : this.resolveOfferFareBrand(scheduleAwareOffer);
+    const brandRules = resolveFareBrandRules(fareBrand, passengers.travelClass);
+
+    const computation = await this.computeFareAndSeats({
+      scheduleAwareOffer,
+      pricingInstances,
+      instancesMap: instances.map,
+      passengers,
+      fareBrand,
+      brandRules,
+      fareCurrency,
+      targetCurrency,
+      convert,
+      selectedSeats: options?.seats ?? [],
+      bookingId: options?.bookingId,
+      fxRates,
+    });
+
+    return this.persistPricingQuote({
+      searchId,
+      offerId,
+      scheduleAwareOffer,
+      scheduleSnapshot,
+      computation,
+      fareBrand,
+      targetCurrency,
+      fxRates,
+      fxRatesAt,
+      selectedSeatCount: options?.seats?.length ?? 0,
+    });
+  }
+
+  private async loadOfferFromCache(searchId: string, offerId: string) {
+    const cachedOffer = await this.searchStore.getOfferWithContext(searchId, offerId);
+    if (!cachedOffer) {
+      throw new NotFoundException('Offer not found');
+    }
+
+    const offerCurrency = cachedOffer.offer.currencyCode ?? cachedOffer.offer.price.currency;
+
+    return {
+      offer: cachedOffer.offer,
+      searchContext: cachedOffer.context,
+      offerCurrency,
+    };
+  }
+
+  private async loadFlightInstances(offer: FlightOffer) {
     const flightInstanceIds = offer.itineraries.flatMap((itinerary) =>
       itinerary.segments.map((segment) => segment.flightInstanceId),
     );
-
     const uniqueFlightInstanceIds = [...new Set(flightInstanceIds)];
 
     const uniqueInstances = await this.prisma.flightInstance.findMany({
-      where: {
-        id: { in: uniqueFlightInstanceIds },
-      },
+      where: { id: { in: uniqueFlightInstanceIds } },
       include: flightInstanceInclude,
     });
 
-    const instancesMap = new Map(uniqueInstances.map((instance) => [instance.id, instance])) as Map<
+    const map = new Map(uniqueInstances.map((instance) => [instance.id, instance])) as Map<
       string,
       FlightInstanceWithRelations
     >;
 
     for (const id of flightInstanceIds) {
-      if (!instancesMap.has(id)) {
+      if (!map.has(id)) {
         throw new NotFoundException(`Flight instance ${id} not found`);
       }
     }
 
     assertFlightInstancesBookable(uniqueInstances);
 
-    const scheduleSnapshot = applyInstanceSchedulesToOffer(offer, instancesMap);
-    const scheduleAwareOffer = scheduleSnapshot.offer;
-
     const pricingInstances = uniqueFlightInstanceIds.map(
-      (id) => instancesMap.get(id)!,
+      (id) => map.get(id)!,
     ) as FlightInstanceWithFares[];
 
+    return { map, pricingInstances };
+  }
+
+  private assertUniformFareCurrency(pricingInstances: FlightInstanceWithFares[]): Currency {
     const firstFare = pricingInstances[0]?.fares?.[0];
     if (!firstFare) {
       throw new NotFoundException('Fare currency not found');
     }
+
     const fareCurrency = firstFare.currency;
 
     for (const inst of pricingInstances) {
@@ -130,12 +202,28 @@ export class DbPricingProvider implements FlightPricingProvider {
       }
     }
 
+    return fareCurrency;
+  }
+
+  private async resolvePassengers(
+    searchId: string,
+    offerId: string,
+    loaded: {
+      offer: FlightOffer;
+      searchContext: CachedSearchContext | null;
+    },
+    options: PricingOptions | undefined,
+    scheduleAwareOffer: FlightOffer,
+    pricingInstances: FlightInstanceWithFares[],
+  ): Promise<
+    ResolvedPassengers & { travelClass: 'ECONOMY' | 'PREMIUM_ECONOMY' | 'BUSINESS' | 'FIRST' }
+  > {
     const lastPricing = await this.searchStore.getLastPricing(searchId, offerId);
     this.logger.debug({ searchId, offerId, hasLastPricing: !!lastPricing }, 'Loaded last pricing');
 
-    const searchPassengers = searchContext
-      ? searchContext.passengers
-      : this.inferPassengersFromOffer(offer);
+    const searchPassengers = loaded.searchContext
+      ? loaded.searchContext.passengers
+      : this.inferPassengersFromOffer(loaded.offer);
 
     const hasPassengerUpdate =
       options?.adults !== undefined ||
@@ -183,24 +271,19 @@ export class DbPricingProvider implements FlightPricingProvider {
     seatedInfants = validated.seatedInfants;
 
     const seatsRequired = countSeatsRequired({ adults, children, infants, seatedInfants });
-    const passengerCounts = {
-      ADULT: adults,
-      CHILD: children,
-      HELD_INFANT: infants,
-      SEATED_INFANT: seatedInfants,
-    };
 
     const firstFareDetail = scheduleAwareOffer.travelerPricings?.[0]?.fareDetailsBySegment?.[0];
     if (!firstFareDetail) {
       throw new BadRequestException('Fare details not found');
     }
+
     const travelClass = firstFareDetail.cabin as
       | 'ECONOMY'
       | 'PREMIUM_ECONOMY'
       | 'BUSINESS'
       | 'FIRST';
 
-    if (searchContext && searchContext.travelClass !== travelClass) {
+    if (loaded.searchContext && loaded.searchContext.travelClass !== travelClass) {
       throw new BadRequestException(
         'Offer travel class does not match the original search. Start a new search.',
       );
@@ -213,10 +296,46 @@ export class DbPricingProvider implements FlightPricingProvider {
       throw new BadRequestException('Not enough seats available');
     }
 
-    const fareBrand = isFareBrand(options?.fareBrand)
-      ? options.fareBrand
-      : this.resolveOfferFareBrand(scheduleAwareOffer);
-    const brandRules = resolveFareBrandRules(fareBrand, travelClass);
+    return { adults, children, infants, seatedInfants, travelClass };
+  }
+
+  private async computeFareAndSeats(params: {
+    scheduleAwareOffer: FlightOffer;
+    pricingInstances: FlightInstanceWithFares[];
+    instancesMap: Map<string, FlightInstanceWithFares>;
+    passengers: ResolvedPassengers & {
+      travelClass: 'ECONOMY' | 'PREMIUM_ECONOMY' | 'BUSINESS' | 'FIRST';
+    };
+    fareBrand: FareBrand;
+    brandRules: ReturnType<typeof resolveFareBrandRules>;
+    fareCurrency: Currency;
+    targetCurrency: Currency;
+    convert: (amount: number, from: string, to: string) => number;
+    selectedSeats: SeatOptionDto[];
+    bookingId?: string;
+    fxRates: Record<string, number>;
+  }): Promise<FareComputation> {
+    const {
+      scheduleAwareOffer,
+      pricingInstances,
+      instancesMap,
+      passengers,
+      fareBrand,
+      brandRules,
+      fareCurrency,
+      targetCurrency,
+      convert,
+      selectedSeats,
+      bookingId,
+      fxRates,
+    } = params;
+
+    const passengerCounts = {
+      ADULT: passengers.adults,
+      CHILD: passengers.children,
+      HELD_INFANT: passengers.infants,
+      SEATED_INFANT: passengers.seatedInfants,
+    };
 
     let basePrice = 0;
     for (const instance of pricingInstances) {
@@ -224,41 +343,45 @@ export class DbPricingProvider implements FlightPricingProvider {
         if (!count) continue;
         const fare = instance.fares.find(
           (f) =>
-            f.passengerType === type && f.travelClass === travelClass && f.fareBrand === fareBrand,
+            f.passengerType === type &&
+            f.travelClass === passengers.travelClass &&
+            f.fareBrand === fareBrand,
         );
         if (!fare) {
-          throw new NotFoundException(`Fare not found for ${type} ${travelClass} ${fareBrand}`);
+          throw new NotFoundException(
+            `Fare not found for ${type} ${passengers.travelClass} ${fareBrand}`,
+          );
         }
-        const convertedPrice = convert(Number(fare.basePrice), fare.currency, targetCurrency);
-        basePrice += convertedPrice * count;
+        basePrice += convert(Number(fare.basePrice), fare.currency, targetCurrency) * count;
       }
     }
 
+    const seatsRequired = countSeatsRequired(passengers);
     const fareBreakdown = buildFarePriceBreakdown(basePrice, seatsRequired);
 
     const seatPrice = await this.calculateSeatPrice.calculateSeatPrice(
       scheduleAwareOffer,
-      options?.seats ?? [],
+      selectedSeats,
       fareCurrency,
       targetCurrency,
       fxRates,
-      options?.bookingId,
+      bookingId,
     );
 
     const totalPrice = fareBreakdown.total + seatPrice;
+    const pricedOffer = structuredClone(scheduleAwareOffer);
 
     pricedOffer.price = formatOfferPrice(targetCurrency, fareBreakdown);
     pricedOffer.price.total = totalPrice.toFixed(2);
     pricedOffer.price.grandTotal = totalPrice.toFixed(2);
 
     const allSegments = scheduleAwareOffer.itineraries.flatMap((itinerary) => itinerary.segments);
-
     const travelerPricings = this.buildTravelerPricings(
-      { adults, children, infants, seatedInfants },
+      passengers,
       allSegments,
       instancesMap,
       pricingInstances,
-      travelClass,
+      passengers.travelClass,
       targetCurrency,
       convert,
       fareBrand,
@@ -281,30 +404,64 @@ export class DbPricingProvider implements FlightPricingProvider {
       refundable: brandRules.refundable,
     };
 
-    await this.searchStore.replaceOfferInSearch(searchId, offerId, cachedOfferUpdate);
+    return {
+      fareBreakdown,
+      seatPrice,
+      totalPrice,
+      travelerPricings,
+      pricedOffer,
+      cachedOfferUpdate,
+    };
+  }
 
-    const selectedSeats = options?.seats ?? [];
+  private async persistPricingQuote(params: {
+    searchId: string;
+    offerId: string;
+    scheduleAwareOffer: FlightOffer;
+    scheduleSnapshot: ReturnType<typeof applyInstanceSchedulesToOffer>;
+    computation: FareComputation;
+    fareBrand: FareBrand;
+    targetCurrency: Currency;
+    fxRates: Record<string, number>;
+    fxRatesAt: string;
+    selectedSeatCount: number;
+  }): Promise<FlightPricingResponse> {
+    const {
+      searchId,
+      offerId,
+      scheduleAwareOffer,
+      scheduleSnapshot,
+      computation,
+      fareBrand,
+      targetCurrency,
+      fxRates,
+      fxRatesAt,
+      selectedSeatCount,
+    } = params;
+
+    await this.searchStore.replaceOfferInSearch(searchId, offerId, computation.cachedOfferUpdate);
+
     const quoteMeta = createPricingQuoteMeta(
-      selectedSeats.length > 0 ? PRICING_QUOTE_WITH_SEATS_TTL_SECONDS : PRICING_QUOTE_TTL_SECONDS,
+      selectedSeatCount > 0 ? PRICING_QUOTE_WITH_SEATS_TTL_SECONDS : PRICING_QUOTE_TTL_SECONDS,
     );
 
     const flightPricing: FlightPricingResponse = {
-      id: pricedOffer.id,
+      id: computation.pricedOffer.id,
       ...quoteMeta,
       source: OFFER_SOURCE_INTERNAL_DB,
       pricingMode: PRICING_MODE_INDICATIVE,
       fareBrand,
       price: {
-        base: fareBreakdown.base,
-        taxes: fareBreakdown.taxTotal,
-        fees: fareBreakdown.feeTotal,
-        taxItems: fareBreakdown.taxes,
-        feeItems: fareBreakdown.fees,
-        seats: seatPrice,
-        total: totalPrice,
+        base: computation.fareBreakdown.base,
+        taxes: computation.fareBreakdown.taxTotal,
+        fees: computation.fareBreakdown.feeTotal,
+        taxItems: computation.fareBreakdown.taxes,
+        feeItems: computation.fareBreakdown.fees,
+        seats: computation.seatPrice,
+        total: computation.totalPrice,
         currency: targetCurrency,
       },
-      travelers: travelerPricings,
+      travelers: computation.travelerPricings,
       outbound: mapItinerary(scheduleAwareOffer.itineraries[0]),
       inbound: scheduleAwareOffer.itineraries[1]
         ? mapItinerary(scheduleAwareOffer.itineraries[1])
@@ -315,7 +472,7 @@ export class DbPricingProvider implements FlightPricingProvider {
       scheduleChanges: scheduleSnapshot.scheduleChanges,
       fxRates,
       fxRatesAt,
-      seatsPricingMode: selectedSeats.length > 0 ? PRICING_MODE_INDICATIVE : undefined,
+      seatsPricingMode: selectedSeatCount > 0 ? PRICING_MODE_INDICATIVE : undefined,
     };
 
     await this.searchStore.saveLastPricing(searchId, offerId, flightPricing);
@@ -341,12 +498,7 @@ export class DbPricingProvider implements FlightPricingProvider {
   }
 
   private buildTravelerPricings(
-    passengers: {
-      adults?: number;
-      children?: number;
-      infants?: number;
-      seatedInfants?: number;
-    },
+    passengers: ResolvedPassengers,
     segments: { id: string; flightInstanceId: string }[],
     instancesMap: Map<string, FlightInstanceWithFares>,
     pricingInstances: FlightInstanceWithFares[],
@@ -431,19 +583,19 @@ export class DbPricingProvider implements FlightPricingProvider {
       };
     };
 
-    for (let i = 0; i < (passengers.adults ?? 0); i++) {
+    for (let i = 0; i < passengers.adults; i++) {
       travelers.push(createTraveler(PassengerType.ADULT, 'ADULT'));
     }
 
-    for (let i = 0; i < (passengers.children ?? 0); i++) {
+    for (let i = 0; i < passengers.children; i++) {
       travelers.push(createTraveler(PassengerType.CHILD, 'CHILD'));
     }
 
-    for (let i = 0; i < (passengers.infants ?? 0); i++) {
+    for (let i = 0; i < passengers.infants; i++) {
       travelers.push(createTraveler(PassengerType.HELD_INFANT, 'HELD_INFANT'));
     }
 
-    for (let i = 0; i < (passengers.seatedInfants ?? 0); i++) {
+    for (let i = 0; i < passengers.seatedInfants; i++) {
       travelers.push(createTraveler(PassengerType.SEATED_INFANT, 'SEATED_INFANT'));
     }
 
