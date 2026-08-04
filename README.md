@@ -102,7 +102,7 @@
 
 | Область | Реализация |
 |---------|------------|
-| **Поиск рейсов** | DB-backed search, Redis-кэш, конвертация валют (Frankfurter API) |
+| **Поиск рейсов** | DB-backed search, Redis-кэш, конвертация валют — **[docs/flights.md](./docs/flights.md)** |
 | **Бронирование** | PNR, travelers, infant/child fares, idempotency (`Idempotency-Key`) |
 | **Места** | Layout из БД, holds, checkout |
 | **Оплата** | Stripe Checkout + YooKassa, webhook fulfillment, admin confirm/cancel |
@@ -794,6 +794,7 @@ HTTP_CORS=http://localhost:3111,http://localhost
 | [docs/ticketing.md](./docs/ticketing.md) | Ticketing: async issuance, compensation, mail ordering |
 | [docs/users.md](./docs/users.md) | Users: profile, saved passengers, notifications, concurrency |
 | [docs/scheduler.md](./docs/scheduler.md) | Scheduler: maintenance pipeline, cron intervals, multi-instance lock |
+| [docs/flights.md](./docs/flights.md) | Flights: search cache, pricing quotes, FX, schedule sync |
 | [../ARCHITECTURE.md](../ARCHITECTURE.md) | Архитектурный разбор |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | Конвенции, Swagger |
 | [AUTHORIZATION_SYSTEM.md](./AUTHORIZATION_SYSTEM.md) | Auth flow |
