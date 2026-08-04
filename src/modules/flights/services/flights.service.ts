@@ -40,7 +40,7 @@ import {
   encodeCursor,
 } from '../../../shared/utils/cursor.util';
 import { buildSearchQueryKey } from '../utils/search-query-key.util';
-import { validatePassengerCounts } from '../utils/passenger-counts.util';
+import { validatePassengerCounts } from 'src/shared/booking/passenger-counts.util';
 import { assertValidSearchDirections } from '../utils/validate-search-directions.util';
 import { resolveDefaultSearchCurrencyCode } from 'src/modules/payment/utils/payment-defaults.util';
 import { FlightScheduleSyncService } from './flight-schedule-sync.service';

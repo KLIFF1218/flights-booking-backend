@@ -51,7 +51,7 @@ import {
   assertPriceWithinTolerance,
   assertPricingQuoteActive,
   assertPricingQuoteIdMatches,
-} from 'src/modules/flights/utils/pricing-quote.util';
+} from 'src/shared/pricing/pricing-quote.util';
 import { assertBookingFlightsStillBookable } from '../utils/booking-flight-validation.util';
 import { BookingMetricsService } from '../metrics/booking-metrics.service';
 import {

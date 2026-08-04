@@ -2,7 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { type PassengerType } from '@prisma/client';
 import type { AssignSeatDto } from '../dtos/add-seats.dto';
 import type { BookingSnapshot } from '../interfaces/booking-snapshot.interface';
-import { isLapInfantType } from 'src/modules/flights/utils/passenger-counts.util';
+import { isLapInfantType } from 'src/shared/booking/passenger-counts.util';
 
 export interface SeatSelectionTraveler {
   id: string;

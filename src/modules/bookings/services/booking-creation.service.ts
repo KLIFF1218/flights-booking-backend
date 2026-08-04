@@ -33,7 +33,7 @@ import { assertPaymentProviderCurrencyCompatible } from 'src/modules/payment/uti
 import {
   assertPriceWithinTolerance,
   assertPricingQuoteActive,
-} from 'src/modules/flights/utils/pricing-quote.util';
+} from 'src/shared/pricing/pricing-quote.util';
 import {
   assertFlightInstancesBookable,
   syncOfferScheduleFromPricing,

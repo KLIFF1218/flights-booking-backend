@@ -1,7 +1,10 @@
 import { FlightStatus } from '@prisma/client';
 import type { FlightOffer } from '../interfaces/flight-offers.interface';
 import type { FlightInstanceWithRelations } from '../providers/prisma/flight-instance.type';
-import { countSeatsRequired, type PassengerCountsInput } from './passenger-counts.util';
+import {
+  countSeatsRequired,
+  type PassengerCountsInput,
+} from 'src/shared/booking/passenger-counts.util';
 
 const UNBOOKABLE_STATUSES: FlightStatus[] = [FlightStatus.CANCELLED, FlightStatus.COMPLETED];
 

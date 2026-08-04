@@ -5,7 +5,7 @@ import { PassengerType, Prisma } from '@prisma/client';
 import { TravelerInputDto } from '../dtos/traveler.input.dto';
 import { BookingSnapshot } from '../interfaces/booking-snapshot.interface';
 import { Logger } from 'nestjs-pino';
-import { isInfantType } from 'src/modules/flights/utils/passenger-counts.util';
+import { isInfantType } from 'src/shared/booking/passenger-counts.util';
 import {
   extractDepartureDateFromSnapshot,
   extractIsInternationalFromSnapshot,

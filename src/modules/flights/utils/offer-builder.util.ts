@@ -15,7 +15,7 @@ import { buildTimeline } from './timeline.util';
 import { formatDuration } from './time.util';
 import { buildOneWayLeg } from './offer-flight-instances.util';
 import { buildFarePriceBreakdown, formatOfferPrice } from './fare-charges.util';
-import { countSeatsRequired } from './passenger-counts.util';
+import { countSeatsRequired } from 'src/shared/booking/passenger-counts.util';
 import {
   DEFAULT_SEARCH_FARE_BRAND,
   OFFER_SOURCE_INTERNAL_DB,
