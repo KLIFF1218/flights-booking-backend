@@ -37,7 +37,7 @@ ENV DATABASE_URL=postgresql://build:build@localhost:5432/build
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
-RUN corepack install && pnpm install --prod --frozen-lockfile && \
+RUN corepack install && pnpm install --prod --frozen-lockfile --ignore-scripts && \
     pnpm store prune
 
 COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
