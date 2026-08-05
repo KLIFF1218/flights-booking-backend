@@ -1,12 +1,10 @@
-import { forwardRef, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { WebhookService } from './webhook.service';
 import { WebhookController } from './webhook.controller';
-import { YoomoneyModule } from '../providers/yoomoney/yoomoney.module';
-import { PaymentsModule } from '../payment.module';
-import { StripeModule } from '../providers/stripe/stripe.module';
+import { PaymentCoreModule } from '../payment-core.module';
 
 @Module({
-  imports: [YoomoneyModule, StripeModule, forwardRef(() => PaymentsModule)],
+  imports: [PaymentCoreModule],
   controllers: [WebhookController],
   providers: [WebhookService],
 })

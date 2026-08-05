@@ -1,0 +1,1 @@
+export const TICKETING_QUEUE_MAX_ATTEMPTS = 5;

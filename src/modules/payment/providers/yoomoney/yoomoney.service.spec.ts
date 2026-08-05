@@ -207,12 +207,11 @@ describe('YookassaProvider', () => {
   it('refundPayment should call yookassaService.refunds.create', async () => {
     yookassaService.refunds.create.mockResolvedValue({ id: 'refund_1' });
 
-    const result = await service.refundPayment('pay_1');
+    await service.refundPayment('pay_1');
 
     expect(yookassaService.refunds.create).toHaveBeenCalledWith({
       payment_id: 'pay_1',
     });
-    expect(result).toEqual({ id: 'refund_1' });
   });
 
   //
@@ -237,6 +236,7 @@ describe('YookassaProvider', () => {
       eventId: 'payment.succeeded:p1',
       status: TransactionStatus.SUCCEED,
       method: 'unknown',
+      requiresCaptureAfterAuthorize: false,
     });
   });
 
@@ -254,7 +254,7 @@ describe('YookassaProvider', () => {
     expect(result.status).toBe(TransactionStatus.CANCELED);
   });
 
-  it('should process "payment.waiting_for_capture" and call capture()', async () => {
+  it('should process "payment.waiting_for_capture" without capturing before DB authorize', async () => {
     const dto = {
       event: 'payment.waiting_for_capture',
       object: {
@@ -263,15 +263,14 @@ describe('YookassaProvider', () => {
       },
     };
 
-    yookassaService.payments.capture.mockResolvedValue(true);
-
     const result = await service.handleWebhook(dto as any);
 
-    expect(yookassaService.payments.capture).toHaveBeenCalledWith('p3');
-    expect(result.status).toBe(TransactionStatus.SUCCEED);
+    expect(yookassaService.payments.capture).not.toHaveBeenCalled();
+    expect(result.status).toBe(TransactionStatus.AUTHORIZED);
+    expect(result.requiresCaptureAfterAuthorize).toBe(true);
   });
 
-  it('should not throw if capture() fails', async () => {
+  it('should not capture in handleWebhook when capture would fail', async () => {
     const dto = {
       event: 'payment.waiting_for_capture',
       object: {
@@ -280,12 +279,11 @@ describe('YookassaProvider', () => {
       },
     };
 
-    yookassaService.payments.capture.mockRejectedValue(new Error('capture failed'));
-
     const result = await service.handleWebhook(dto as any);
 
-    // Error is logged, but the function does not throw
+    expect(yookassaService.payments.capture).not.toHaveBeenCalled();
     expect(result.status).toBe(TransactionStatus.AUTHORIZED);
+    expect(result.requiresCaptureAfterAuthorize).toBe(true);
   });
 
   it('should warn for unhandled events', async () => {

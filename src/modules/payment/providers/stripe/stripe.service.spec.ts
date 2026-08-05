@@ -48,7 +48,7 @@ describe('StripeService', () => {
         StripeService,
         { provide: ConfigService, useValue: configService },
         { provide: PrismaService, useValue: prisma },
-        { provide: Logger, useValue: { error: jest.fn() } },
+        { provide: Logger, useValue: { error: jest.fn(), log: jest.fn() } },
       ],
     }).compile();
 
@@ -263,7 +263,7 @@ describe('StripeService', () => {
       expect(result).toBeNull();
     });
 
-    it('should handle payment_intent.succeeded', async () => {
+    it('ignores payment_intent.succeeded for Checkout flow (handled by checkout.session.completed)', async () => {
       const event = {
         id: 'evt_pi_1',
         type: 'payment_intent.succeeded',
@@ -280,15 +280,7 @@ describe('StripeService', () => {
 
       const result = await service.handleWebhook(event);
 
-      expect(result).toEqual({
-        transactionId: 'txn-789',
-        bookingId: 'book-789',
-        paymentId: 'pi_test_789',
-        provider: PaymentProvider.STRIPE,
-        eventId: 'evt_pi_1',
-        status: TransactionStatus.SUCCEED,
-        method: 'card',
-      });
+      expect(result).toBeNull();
     });
 
     it('should handle payment_intent.payment_failed', async () => {

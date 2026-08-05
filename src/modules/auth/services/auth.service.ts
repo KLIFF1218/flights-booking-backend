@@ -6,7 +6,7 @@ import { ConfigService } from '@nestjs/config';
 import { Request, Response } from 'express';
 import { Currency, UserStatus } from '@prisma/client';
 import { Logger } from 'nestjs-pino';
-import { UsersService } from 'src/modules/users/users.service';
+import { UsersService } from 'src/modules/users/services/users.service';
 import { MetricsService } from '../../../infra/metrics/metrics.service';
 import { TokenService } from './token.service';
 import { RefreshService } from './refresh.service';
@@ -19,7 +19,7 @@ import { runSafely } from 'src/common/utils/safe-metrics.util';
 import {
   resolveCountryFromLocale,
   resolveCurrencyFromLocale,
-} from 'src/modules/users/utils/locale-defaults.util';
+} from 'src/shared/locale/locale-defaults.util';
 
 const INVALID_CREDENTIALS = 'Invalid login or password';
 

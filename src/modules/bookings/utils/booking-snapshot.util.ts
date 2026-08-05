@@ -2,13 +2,13 @@ import { BadRequestException } from '@nestjs/common';
 import { type PaymentProvider } from '@prisma/client';
 import type { BookingSnapshot } from '../interfaces/booking-snapshot.interface';
 import type { FlightPricingResponse } from 'src/modules/flights/dtos';
-import { syncOfferScheduleFromPricing } from 'src/modules/flights/utils/offer-schedule.util';
+import { syncOfferScheduleFromPricing } from 'src/modules/flights/utils/offer/offer-schedule.util';
 import type { BuiltSegment } from '../types/segment.types';
 import {
   DEFAULT_PAYMENT_PROVIDER,
   resolveDefaultPaymentProvider,
   SUPPORTED_PAYMENT_PROVIDERS,
-} from 'src/modules/payment/utils/payment-defaults.util';
+} from 'src/shared/currency/payment-defaults.util';
 
 export { DEFAULT_PAYMENT_PROVIDER, resolveDefaultPaymentProvider, SUPPORTED_PAYMENT_PROVIDERS };
 

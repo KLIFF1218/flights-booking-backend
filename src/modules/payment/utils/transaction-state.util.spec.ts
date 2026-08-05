@@ -1,22 +1,16 @@
-import { BookingStatus, TransactionStatus } from '@prisma/client';
+import { TransactionStatus } from '@prisma/client';
 import {
   cancelTransactionIfAbandonable,
   cancelTransactionIfPending,
   finalizeTransactionIfPending,
   finalizeTransactionToSucceed,
   isAbandonableTransactionStatus,
-  markBookingCanceledIfPaymentPending,
-  markBookingExpiredIfPaymentPending,
-  markBookingPaidIfPending,
   markTransactionAuthorizedIfPending,
 } from './transaction-state.util';
 
 describe('transaction-state.util', () => {
   const client = {
     transaction: {
-      updateMany: jest.fn(),
-    },
-    booking: {
       updateMany: jest.fn(),
     },
   };
@@ -76,30 +70,6 @@ describe('transaction-state.util', () => {
     });
   });
 
-  it('markBookingPaidIfPending updates only payment-pending bookings', async () => {
-    client.booking.updateMany.mockResolvedValue({ count: 1 });
-
-    const updated = await markBookingPaidIfPending(client, 'booking-1');
-
-    expect(updated).toBe(true);
-    expect(client.booking.updateMany).toHaveBeenCalledWith({
-      where: { id: 'booking-1', status: BookingStatus.PAYMENT_PENDING },
-      data: { status: BookingStatus.PAID },
-    });
-  });
-
-  it('markBookingCanceledIfPaymentPending cancels only payment-pending bookings', async () => {
-    client.booking.updateMany.mockResolvedValue({ count: 1 });
-
-    const updated = await markBookingCanceledIfPaymentPending(client, 'booking-1');
-
-    expect(updated).toBe(true);
-    expect(client.booking.updateMany).toHaveBeenCalledWith({
-      where: { id: 'booking-1', status: BookingStatus.PAYMENT_PENDING },
-      data: { status: BookingStatus.CANCELED },
-    });
-  });
-
   it('cancelTransactionIfPending cancels only pending transactions', async () => {
     client.transaction.updateMany.mockResolvedValue({ count: 1 });
 
@@ -124,18 +94,6 @@ describe('transaction-state.util', () => {
         status: { in: [TransactionStatus.PENDING, TransactionStatus.AUTHORIZED] },
       },
       data: { status: TransactionStatus.CANCELED },
-    });
-  });
-
-  it('markBookingExpiredIfPaymentPending expires only payment-pending bookings', async () => {
-    client.booking.updateMany.mockResolvedValue({ count: 1 });
-
-    const updated = await markBookingExpiredIfPaymentPending(client, 'booking-1');
-
-    expect(updated).toBe(true);
-    expect(client.booking.updateMany).toHaveBeenCalledWith({
-      where: { id: 'booking-1', status: BookingStatus.PAYMENT_PENDING },
-      data: { status: BookingStatus.EXPIRED },
     });
   });
 

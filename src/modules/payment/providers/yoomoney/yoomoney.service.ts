@@ -9,6 +9,7 @@ import {
 } from 'nestjs-yookassa';
 import { Currency, PaymentProvider, TransactionStatus } from '@prisma/client';
 import ipRangeCheck from 'ip-range-check';
+import type { PaymentWebhookIngressContext } from '../../interfaces/payment.provider.interface';
 import { PaymentProviderAdapter } from '../../interfaces/payment.provider.interface';
 import { PaymentWebhookResult } from '../../interfaces/payment-webhook-result.dto';
 import { YooKassaWebhookDto } from '../../webhook/dto/yookassa-webhook.dto';
@@ -17,6 +18,7 @@ import { isYookassaConfigured } from 'src/config/yookassa.config';
 
 @Injectable()
 export class YookassaProvider implements PaymentProviderAdapter {
+  readonly provider = PaymentProvider.YOOKASSA;
   private readonly allowedIps: string[];
 
   constructor(
@@ -141,6 +143,14 @@ export class YookassaProvider implements PaymentProviderAdapter {
     return redirectUrl || null;
   }
 
+  async captureAuthorizedPayment(paymentId: string): Promise<void> {
+    await this.capturePayment(paymentId);
+  }
+
+  async cancelPendingPayment(paymentId: string): Promise<void> {
+    await this.cancelPendingPaymentIfNeeded(paymentId);
+  }
+
   async cancelPendingPaymentIfNeeded(paymentId: string): Promise<void> {
     const payment = await this.getPayment(paymentId);
 
@@ -163,9 +173,9 @@ export class YookassaProvider implements PaymentProviderAdapter {
     }
   }
 
-  async refundPayment(paymentId: string) {
+  async refundPayment(paymentId: string, _idempotencyKey?: string): Promise<void> {
     this.ensureConfigured();
-    return this.yookassa.refunds.create({
+    await this.yookassa.refunds.create({
       payment_id: paymentId,
     });
   }
@@ -182,20 +192,12 @@ export class YookassaProvider implements PaymentProviderAdapter {
     }
 
     let status: TransactionStatus = TransactionStatus.PENDING;
+    let requiresCaptureAfterAuthorize = false;
 
     switch (payload.event) {
       case 'payment.waiting_for_capture':
-        try {
-          await this.capturePayment(paymentId);
-          // Capture succeeded — treat as paid; payment.succeeded may still arrive as no-op.
-          status = TransactionStatus.SUCCEED;
-        } catch (err: unknown) {
-          this.logger.error(
-            { err: err instanceof Error ? err : String(err), paymentId },
-            'Auto-capture failed',
-          );
-          status = TransactionStatus.AUTHORIZED;
-        }
+        status = TransactionStatus.AUTHORIZED;
+        requiresCaptureAfterAuthorize = true;
         break;
       case 'payment.succeeded':
         status = TransactionStatus.SUCCEED;
@@ -220,7 +222,16 @@ export class YookassaProvider implements PaymentProviderAdapter {
 
       status,
       method: payload.object.payment_method?.type ?? 'unknown',
+      requiresCaptureAfterAuthorize,
     };
+  }
+
+  verifyWebhookIngress(context: PaymentWebhookIngressContext): void {
+    if (!context.ip) {
+      throw new ForbiddenException('Unauthorized webhook source');
+    }
+
+    this.verifyWebhookIp(context.ip);
   }
 
   verifyWebhookIp(ip: string): void {

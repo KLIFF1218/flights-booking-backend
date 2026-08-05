@@ -1,13 +1,13 @@
 import { BadRequestException } from '@nestjs/common';
-import type {
-  FlightSearchCursorPayload,
-  PreprocessedFlightOffer,
-  SortType,
-} from '../../modules/flights/types/flights.types';
 import { Currency } from '@prisma/client';
+import type {
+  CursorPreprocessedOffer,
+  FlightSearchCursorPayload,
+  SortType,
+} from '../flights/search-cursor.types';
 
 export function buildCursor(
-  offer: PreprocessedFlightOffer,
+  offer: CursorPreprocessedOffer,
   sort: SortType,
   searchHash: string,
 ): FlightSearchCursorPayload {
@@ -82,7 +82,7 @@ export function decodeCursor<T>(cursor?: string): T | null {
 
 export function cursorToFakeOffer(
   cursor: FlightSearchCursorPayload,
-): Partial<PreprocessedFlightOffer> {
+): Partial<CursorPreprocessedOffer> {
   return {
     id: cursor.id,
     price: {
@@ -96,5 +96,5 @@ export function cursorToFakeOffer(
       bestScore: cursor.score ?? 0,
       totalStops: 0,
     },
-  } as Partial<PreprocessedFlightOffer>;
+  };
 }

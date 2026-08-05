@@ -25,7 +25,7 @@ import {
   assertPaymentProviderSupported,
   resolvePaymentProviderFromSnapshot,
 } from '../utils/booking-snapshot.util';
-import { assertPaymentProviderCurrencyCompatible } from 'src/modules/payment/utils/payment-defaults.util';
+import { assertPaymentProviderCurrencyCompatible } from 'src/shared/currency/payment-defaults.util';
 import {
   assertBookingStatusAllows,
   BookingOperation,
@@ -51,7 +51,7 @@ import {
   assertPriceWithinTolerance,
   assertPricingQuoteActive,
   assertPricingQuoteIdMatches,
-} from 'src/modules/flights/utils/pricing-quote.util';
+} from 'src/shared/pricing/pricing-quote.util';
 import { assertBookingFlightsStillBookable } from '../utils/booking-flight-validation.util';
 import { BookingMetricsService } from '../metrics/booking-metrics.service';
 import {

@@ -1,5 +1,5 @@
 import { PassengerType, type Prisma, TravelClass } from '@prisma/client';
-import { formatDateInTimeZone } from 'src/modules/flights/utils/timezone-date.util';
+import { formatDateInTimeZone } from 'src/shared/datetime/timezone-date.util';
 
 export const adminFlightFullInclude = {
   flight: {

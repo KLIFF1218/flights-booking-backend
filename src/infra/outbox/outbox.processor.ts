@@ -23,7 +23,7 @@ import {
 import {
   TicketingFailedOutboxHandler,
   type TicketingFailedOutboxPayload,
-} from 'src/modules/bookings/handlers/ticketing-failed.outbox-handler';
+} from 'src/modules/ticketing/handlers/ticketing-failed.outbox-handler';
 import {
   CreateCompensationOutboxHandler,
   type CreateCompensationOutboxPayload,
@@ -44,7 +44,6 @@ export class OutboxProcessor {
     private readonly kafka: KafkaPublisher,
     private readonly rabbit: BookingEventsPublisher,
     private readonly logger: Logger,
-    @Inject(forwardRef(() => PaymentPendingCancelOutboxHandler))
     private readonly paymentPendingCancelHandler: PaymentPendingCancelOutboxHandler,
     @Inject(forwardRef(() => CheckoutCleanupOutboxHandler))
     private readonly checkoutCleanupHandler: CheckoutCleanupOutboxHandler,

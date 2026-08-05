@@ -1,20 +1,20 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import { PaymentController } from './payment.controller';
-import { PaymentService } from '../services/payment.service';
+import { PaymentTransactionQueryService } from '../services/payment-transaction-query.service';
 import { NotFoundException } from '@nestjs/common';
 
 describe('PaymentController', () => {
   let controller: PaymentController;
-  let paymentService: { getTransactionStatus: jest.Mock };
+  let paymentTransactionQuery: { getTransactionStatus: jest.Mock };
 
   beforeEach(async () => {
-    paymentService = {
+    paymentTransactionQuery = {
       getTransactionStatus: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [PaymentController],
-      providers: [{ provide: PaymentService, useValue: paymentService }],
+      providers: [{ provide: PaymentTransactionQueryService, useValue: paymentTransactionQuery }],
     }).compile();
 
     controller = module.get<PaymentController>(PaymentController);
@@ -25,12 +25,12 @@ describe('PaymentController', () => {
   });
 
   it('should throw NotFoundException when transaction is missing', async () => {
-    paymentService.getTransactionStatus.mockRejectedValue(new NotFoundException());
+    paymentTransactionQuery.getTransactionStatus.mockRejectedValue(new NotFoundException());
 
     await expect(controller.getTransactionStatus('tx_1', 'user_1')).rejects.toThrow(
       NotFoundException,
     );
-    expect(paymentService.getTransactionStatus).toHaveBeenCalledWith('tx_1', 'user_1');
+    expect(paymentTransactionQuery.getTransactionStatus).toHaveBeenCalledWith('tx_1', 'user_1');
   });
 
   it('should return transaction status and ticket urls', async () => {
@@ -59,11 +59,11 @@ describe('PaymentController', () => {
       },
     };
 
-    paymentService.getTransactionStatus.mockResolvedValue(response);
+    paymentTransactionQuery.getTransactionStatus.mockResolvedValue(response);
 
     const result = await controller.getTransactionStatus('tx_1', 'user_1');
 
     expect(result).toEqual(response);
-    expect(paymentService.getTransactionStatus).toHaveBeenCalledWith('tx_1', 'user_1');
+    expect(paymentTransactionQuery.getTransactionStatus).toHaveBeenCalledWith('tx_1', 'user_1');
   });
 });

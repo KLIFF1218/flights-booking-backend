@@ -4,7 +4,7 @@ import {
   reserveFlightInstanceInventory,
   resolveSeatsToReserve,
 } from './booking-inventory.util';
-import { extractFlightInstanceIds } from 'src/modules/flights/utils/offer-flight-instances.util';
+import { extractFlightInstanceIds } from 'src/modules/flights/utils/offer/offer-flight-instances.util';
 import type { BookingSnapshot } from '../interfaces/booking-snapshot.interface';
 
 describe('booking-inventory.util', () => {

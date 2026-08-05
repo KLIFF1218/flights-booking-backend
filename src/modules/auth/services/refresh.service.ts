@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/co
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import { Request, Response } from 'express';
-import { UsersService } from 'src/modules/users/users.service';
+import { UsersService } from 'src/modules/users/services/users.service';
 import { TokenService } from './token.service';
 import { JwtPayload } from 'src/modules/auth/interfaces';
 import { MetricsService } from 'src/infra/metrics/metrics.service';

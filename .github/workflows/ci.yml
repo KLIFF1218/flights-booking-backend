@@ -49,10 +49,10 @@ jobs:
       - name: Generate Prisma client
         run: pnpm exec prisma generate
 
-      - name: Lint
+      - name: Lint (ESLint, full project)
         run: pnpm lint
 
-      - name: Check formatting
+      - name: Check formatting (Prettier, full project)
         run: pnpm format:check
 
       - name: Run tests

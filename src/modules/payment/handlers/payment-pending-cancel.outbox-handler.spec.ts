@@ -1,25 +1,24 @@
 import { Test, type TestingModule } from '@nestjs/testing';
-import { PaymentProvider, TransactionStatus } from '@prisma/client';
+import { PaymentProvider } from '@prisma/client';
 import { PaymentPendingCancelOutboxHandler } from './payment-pending-cancel.outbox-handler';
-import { PaymentAbandonmentService } from '../services/payment-abandonment.service';
+import { PaymentProviderService } from '../services/payment-provider.service';
 
 describe('PaymentPendingCancelOutboxHandler', () => {
   let handler: PaymentPendingCancelOutboxHandler;
-  let module: TestingModule;
 
-  const paymentAbandonmentService = {
-    cancelPendingPaymentAtProviderBestEffort: jest.fn(),
+  const paymentProviderService = {
+    cancelPendingPaymentBestEffort: jest.fn(),
   };
 
   beforeEach(async () => {
     jest.clearAllMocks();
 
-    module = await Test.createTestingModule({
+    const module: TestingModule = await Test.createTestingModule({
       providers: [
         PaymentPendingCancelOutboxHandler,
         {
-          provide: PaymentAbandonmentService,
-          useValue: paymentAbandonmentService,
+          provide: PaymentProviderService,
+          useValue: paymentProviderService,
         },
       ],
     }).compile();
@@ -27,24 +26,27 @@ describe('PaymentPendingCancelOutboxHandler', () => {
     handler = module.get(PaymentPendingCancelOutboxHandler);
   });
 
-  afterEach(async () => {
-    await module?.close();
-  });
-
-  it('delegates pending cancel to abandonment service', async () => {
+  it('cancels pending payment at provider', async () => {
     await handler.handle({
       transactionId: 'tx-1',
       provider: PaymentProvider.STRIPE,
       externalId: 'cs_test_1',
     });
 
-    expect(paymentAbandonmentService.cancelPendingPaymentAtProviderBestEffort).toHaveBeenCalledWith(
-      {
-        id: 'tx-1',
-        status: TransactionStatus.PENDING,
-        provider: PaymentProvider.STRIPE,
-        externalId: 'cs_test_1',
-      },
+    expect(paymentProviderService.cancelPendingPaymentBestEffort).toHaveBeenCalledWith(
+      PaymentProvider.STRIPE,
+      'cs_test_1',
+      { transactionId: 'tx-1' },
     );
+  });
+
+  it('skips provider cancel when external id is missing', async () => {
+    await handler.handle({
+      transactionId: 'tx-1',
+      provider: PaymentProvider.STRIPE,
+      externalId: null,
+    });
+
+    expect(paymentProviderService.cancelPendingPaymentBestEffort).not.toHaveBeenCalled();
   });
 });

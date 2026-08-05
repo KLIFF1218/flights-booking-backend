@@ -1,1 +1,1 @@
-export * from './cursor-payload.type';
+export * from './flights.types';

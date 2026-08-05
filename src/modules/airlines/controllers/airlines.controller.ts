@@ -1,6 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiOkResponse } from '@nestjs/swagger';
-import { AirlinesService } from '../airlines.service';
+import { AirlinesService } from '../services/airlines.service';
 import { Protected, Roles } from 'src/common/decorators';
 import { Role } from '@prisma/client';
 import { AirlineResponseDto } from '../dtos/airline-response.dto';

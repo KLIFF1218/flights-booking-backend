@@ -97,16 +97,6 @@ export class MetricsInterceptor implements NestInterceptor {
       return route || '/';
     }
 
-    return this.normalizePath(request.path);
-  }
-
-  private normalizePath(path: string): string {
-    return path
-      .replace(
-        /\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi,
-        '/:id',
-      )
-      .replace(/\/c[a-z0-9]{20,}/gi, '/:id')
-      .replace(/\/\d+/g, '/:id');
+    return '404_not_found';
   }
 }

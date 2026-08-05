@@ -36,6 +36,7 @@ export type BookingCheckoutStage = (typeof BOOKING_CHECKOUT_STAGES)[number];
 
 export const BOOKING_MAINTENANCE_JOBS = [
   'expire_bookings',
+  'reconcile_orphan_payments',
   'release_expired_holds',
   'abandon_payments',
 ] as const;

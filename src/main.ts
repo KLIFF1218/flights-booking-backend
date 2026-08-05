@@ -18,7 +18,6 @@ import { startTelemetry, shutdownTelemetry } from './telemetry';
 
 import { getCorsConfig } from './config/cors.config';
 import { getSwaggerConfig } from './config/swagger.config';
-import { assertJwtSecretsForProduction } from './config/jwt-secrets';
 import fs from 'fs';
 import path from 'path';
 import type { Server } from 'http';
@@ -47,6 +46,15 @@ function mountSwaggerDocsRedirects(app: NestExpressApplication): void {
   }
 }
 
+process.on('unhandledRejection', (reason) => {
+  NestLogger.error('Unhandled Rejection', reason instanceof Error ? reason.stack : reason);
+});
+
+process.on('uncaughtException', (err) => {
+  NestLogger.error('Uncaught Exception', err instanceof Error ? err.stack : err);
+  process.exit(1);
+});
+
 startTelemetry();
 
 async function bootstrap(): Promise<void> {
@@ -65,7 +73,6 @@ async function bootstrap(): Promise<void> {
   app.useLogger(logger);
 
   const config = app.get(ConfigService);
-  assertJwtSecretsForProduction(config);
 
   const port = config.getOrThrow<number>('HTTP_PORT');
   const host = config.get<string>('HTTP_HOST', '0.0.0.0');

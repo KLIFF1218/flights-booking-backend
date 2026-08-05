@@ -1,10 +1,11 @@
-import { Module, Scope } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import currencyConfig from './config/currency.config';
-import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 
 import { LoggerModule } from 'nestjs-pino';
-import { SentryModule, SentryGlobalFilter } from '@sentry/nestjs/setup';
+import { SentryModule } from '@sentry/nestjs/setup';
 import { BullModule } from '@nestjs/bullmq';
 
 import { FlightsModule } from './modules/flights/flights.module';
@@ -23,7 +24,6 @@ import { RateLimitGuard } from './common/guards/rate-limit.guard';
 import { RateLimiterService } from './infra/rate-limiter/rate-limiter-redis.service';
 import { MetricsInterceptor } from './common/interceptors/metrics.interceptor';
 
-import { isDev } from './common/utils';
 import { TicketingModule } from './modules/ticketing/ticketing.module';
 import { AdminUsersModule } from './modules/admin/admin-users/admin-users.module';
 import { UsersModule } from './modules/users/users.module';
@@ -42,6 +42,8 @@ import { OutboxModule } from './infra/outbox/outbox.module';
 import { LifecycleModule } from './infra/lifecycle/lifecycle.module';
 import { validateEnv } from './config/env.validation';
 import { AppValidationPipe } from './common/pipes/app-validation.pipe';
+import { getLoggingConfig } from './config/logger.config';
+import { redisConfig } from './config/redis.config';
 
 @Module({
   imports: [
@@ -55,67 +57,12 @@ import { AppValidationPipe } from './common/pipes/app-validation.pipe';
 
     LoggerModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => {
-        const dev = isDev(config);
-
-        return {
-          pinoHttp: {
-            level: config.get('LOG_LEVEL', 'info'),
-            redact: {
-              paths: [
-                'req.headers.authorization',
-                'req.headers.cookie',
-                'body.password',
-                'body.token',
-                'body.refreshToken',
-                'body.accessToken',
-                '*.password',
-                '*.token',
-                '*.refreshToken',
-                '*.accessToken',
-              ],
-              censor: '[REDACTED]',
-            },
-
-            transport: dev
-              ? {
-                  target: 'pino-pretty',
-                  options: {
-                    colorize: true,
-                    translateTime: 'SYS:standard',
-                    ignore: 'pid,hostname',
-                  },
-                }
-              : undefined,
-
-            genReqId: (req) => {
-              const request = req as {
-                requestId?: string;
-                headers: Record<string, string | string[] | undefined>;
-              };
-              if (request.requestId) {
-                return request.requestId;
-              }
-
-              const header = request.headers['x-request-id'] ?? request.headers['x-correlation-id'];
-              if (typeof header === 'string' && header.length > 0) {
-                return header;
-              }
-
-              return crypto.randomUUID();
-            },
-
-            customProps: (req) => ({
-              requestId: (req as { requestId?: string }).requestId ?? req.headers['x-request-id'],
-            }),
-
-            autoLogging: false,
-          },
-        };
-      },
+      useFactory: getLoggingConfig,
     }),
 
     SentryModule.forRoot(),
+
+    ScheduleModule.forRoot(),
 
     InfraModule,
     RedisModule,
@@ -128,23 +75,14 @@ import { AppValidationPipe } from './common/pipes/app-validation.pipe';
     OutboxModule,
     LifecycleModule,
 
-    // PrometheusModule.register({
-    //   path: '/metrics',
-    //   defaultMetrics: {
-    //     enabled: true,
-    //   },
-    // }),
     MetricsModule,
 
     BullModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         connection: {
-          host: config.getOrThrow('REDIS_HOST'),
-          port: config.getOrThrow('REDIS_PORT'),
-          ...(config.get<string>('REDIS_PASSWORD')
-            ? { password: config.get<string>('REDIS_PASSWORD') }
-            : {}),
+          ...redisConfig(config),
+          maxRetriesPerRequest: null,
           tls: config.get('REDIS_TLS') === 'true' ? {} : undefined,
         },
       }),
@@ -170,10 +108,6 @@ import { AppValidationPipe } from './common/pipes/app-validation.pipe';
 
   providers: [
     {
-      provide: APP_FILTER,
-      useClass: SentryGlobalFilter,
-    },
-    {
       provide: APP_INTERCEPTOR,
       useClass: MetricsInterceptor,
     },
@@ -184,7 +118,6 @@ import { AppValidationPipe } from './common/pipes/app-validation.pipe';
     },
     {
       provide: APP_PIPE,
-      scope: Scope.REQUEST,
       useClass: AppValidationPipe,
     },
   ],

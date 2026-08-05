@@ -101,7 +101,7 @@ describe('Payment Webhook — E2E', () => {
     await request(app.getHttpServer()).post(`${API_V1}/webhook/yookassa`).send(payload).expect(200);
 
     const operations = await prisma.idempotencyOperation.findMany({
-      where: { key: `payment.succeeded:${paymentId}` },
+      where: { key: `${transactionId}:${TransactionStatus.SUCCEED}` },
     });
     expect(operations).toHaveLength(1);
     expect(operations[0]?.status).toBe('COMPLETED');

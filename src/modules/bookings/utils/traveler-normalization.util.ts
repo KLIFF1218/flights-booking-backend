@@ -1,6 +1,6 @@
 import { type PassengerType } from '@prisma/client';
 import { type TravelerInputDto } from '../dtos/traveler.input.dto';
-import { isInfantType } from 'src/modules/flights/utils/passenger-counts.util';
+import { isInfantType } from 'src/shared/booking/passenger-counts.util';
 
 export type PersistableTravelerInput = TravelerInputDto & {
   nationality: string;

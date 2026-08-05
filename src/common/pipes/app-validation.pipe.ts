@@ -1,12 +1,10 @@
 import {
-  Inject,
   Injectable,
-  Scope,
   ValidationPipe,
+  type ArgumentMetadata,
   type ValidationPipeOptions,
 } from '@nestjs/common';
-import { REQUEST } from '@nestjs/core';
-import type { Request } from 'express';
+import { YooKassaWebhookDto } from 'src/modules/payment/webhook/dto/yookassa-webhook.dto';
 
 const DEFAULT_VALIDATION_OPTIONS: ValidationPipeOptions = {
   transform: true,
@@ -22,28 +20,21 @@ const YOOKASSA_WEBHOOK_VALIDATION_OPTIONS: ValidationPipeOptions = {
   forbidNonWhitelisted: false,
 };
 
-export function isYookassaWebhookRequest(
-  request: Pick<Request, 'method' | 'path' | 'url'>,
-): boolean {
-  if (request.method !== 'POST') {
-    return false;
+/**
+ * Singleton-scoped global validation.
+ * YooKassa webhooks allow extra PSP fields, bypassed dynamically via metatype.
+ */
+@Injectable()
+export class AppValidationPipe extends ValidationPipe {
+  constructor() {
+    super(DEFAULT_VALIDATION_OPTIONS);
   }
 
-  const path = request.path ?? request.url ?? '';
-  return path.includes('/webhook/yookassa');
-}
-
-/**
- * Request-scoped global validation. YooKassa webhooks allow extra PSP fields.
- * Route-level @UsePipes does not replace the global pipe — both run in sequence.
- */
-@Injectable({ scope: Scope.REQUEST })
-export class AppValidationPipe extends ValidationPipe {
-  constructor(@Inject(REQUEST) request: Request) {
-    super(
-      isYookassaWebhookRequest(request)
-        ? YOOKASSA_WEBHOOK_VALIDATION_OPTIONS
-        : DEFAULT_VALIDATION_OPTIONS,
-    );
+  override async transform(value: unknown, metadata: ArgumentMetadata) {
+    if (metadata.metatype === YooKassaWebhookDto) {
+      const pipe = new ValidationPipe(YOOKASSA_WEBHOOK_VALIDATION_OPTIONS);
+      return pipe.transform(value, metadata) as Promise<unknown>;
+    }
+    return super.transform(value, metadata) as Promise<unknown>;
   }
 }

@@ -10,6 +10,9 @@ export const s3E2eStub = {
 };
 
 export function createE2ePaymentProviderStub() {
+  const yookassaWebhook = createE2eYookassaWebhookStub();
+  const stripeWebhook = createE2eStripeWebhookStub();
+
   return {
     get: async () => ({
       externalId: 'e2e_payment_ext',
@@ -19,7 +22,36 @@ export function createE2ePaymentProviderStub() {
     getPendingPaymentRedirectUrl: async (_provider: PaymentProvider, externalId: string | null) =>
       externalId ? E2E_PAYMENT_REDIRECT_URL : null,
     cancelPendingPayment: async () => undefined,
+    cancelPendingPaymentBestEffort: async () => undefined,
     refundSucceededPayment: async () => undefined,
+    captureAuthorizedPayment: async () => undefined,
+    supportsCaptureAfterAuthorize: () => true,
+    verifyWebhookIngress: (_provider: PaymentProvider) => {
+      if (_provider === PaymentProvider.YOOKASSA) {
+        yookassaWebhook.verifyWebhookIp();
+      }
+    },
+    parseWebhookIngress: async (
+      provider: PaymentProvider,
+      context: { rawBody?: Buffer; stripeSignature?: string },
+    ) => {
+      if (provider === PaymentProvider.STRIPE) {
+        return stripeWebhook.parseEvent(context.rawBody, context.stripeSignature);
+      }
+
+      throw new Error(`parseWebhookIngress is not stubbed for ${provider}`);
+    },
+    handleWebhook: async (provider: PaymentProvider, payload: unknown) => {
+      if (provider === PaymentProvider.YOOKASSA) {
+        return yookassaWebhook.handleWebhook(payload as YooKassaWebhookDto);
+      }
+
+      if (provider === PaymentProvider.STRIPE) {
+        return stripeWebhook.handleWebhook(payload);
+      }
+
+      return null;
+    },
   };
 }
 
@@ -28,7 +60,8 @@ export function createE2ePaymentAbandonmentStub() {
     abandonPayment: async () => undefined,
     cancelPendingPaymentAtProviderBestEffort: async () => undefined,
     refundLateSuccessBestEffort: async () => undefined,
-    markLateSuccessRefunded: async () => undefined,
+    markLateSuccessReconciliationRecorded: async () => undefined,
+    markLateSuccessRefundCompleted: async () => undefined,
     compensateTicketingFailure: async () => undefined,
   };
 }
@@ -51,7 +84,7 @@ export function createE2eYookassaWebhookStub() {
           status = TransactionStatus.CANCELED;
           break;
         case 'payment.waiting_for_capture':
-          status = TransactionStatus.SUCCEED;
+          status = TransactionStatus.AUTHORIZED;
           break;
         default:
           break;
@@ -65,6 +98,9 @@ export function createE2eYookassaWebhookStub() {
         eventId: `${dto.event}:${paymentId}`,
         status,
         method: dto.object.payment_method?.type ?? 'unknown',
+        ...(dto.event === 'payment.waiting_for_capture'
+          ? { requiresCaptureAfterAuthorize: true }
+          : {}),
       };
     },
   };

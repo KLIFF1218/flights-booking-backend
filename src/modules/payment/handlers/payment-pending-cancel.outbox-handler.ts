@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { PaymentProvider, TransactionStatus } from '@prisma/client';
-import { PaymentAbandonmentService } from '../services/payment-abandonment.service';
+import { PaymentProvider } from '@prisma/client';
+import { PaymentProviderService } from '../services/payment-provider.service';
 
 export type PaymentPendingCancelOutboxPayload = {
   transactionId: string;
@@ -10,14 +10,17 @@ export type PaymentPendingCancelOutboxPayload = {
 
 @Injectable()
 export class PaymentPendingCancelOutboxHandler {
-  constructor(private readonly paymentAbandonmentService: PaymentAbandonmentService) {}
+  constructor(private readonly paymentProviderService: PaymentProviderService) {}
 
   async handle(payload: PaymentPendingCancelOutboxPayload): Promise<void> {
-    await this.paymentAbandonmentService.cancelPendingPaymentAtProviderBestEffort({
-      id: payload.transactionId,
-      status: TransactionStatus.PENDING,
-      provider: payload.provider,
-      externalId: payload.externalId,
-    });
+    if (!payload.externalId) {
+      return;
+    }
+
+    await this.paymentProviderService.cancelPendingPaymentBestEffort(
+      payload.provider,
+      payload.externalId,
+      { transactionId: payload.transactionId },
+    );
   }
 }

@@ -4,7 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import { RevokedReason } from '@prisma/client';
 import { RefreshService } from './refresh.service';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
-import { UsersService } from 'src/modules/users/users.service';
+import { UsersService } from 'src/modules/users/services/users.service';
 import { TokenService } from './token.service';
 import { MetricsService } from 'src/infra/metrics/metrics.service';
 import { CsrfService } from './csrf.service';

@@ -8,7 +8,10 @@ import type { FlightsSearchStore } from './flights-cache.service';
 import type { FlightOfferMapper } from './flight-offer.mapper';
 import type { MetricsService } from 'src/infra/metrics/metrics.service';
 import type { FlightScheduleSyncService } from './flight-schedule-sync.service';
-import { preprocessOffers } from '../utils/preprocess-offers.util';
+import { preprocessOffers } from '../utils/search/preprocess-offers.util';
+import { isoDateDaysFromNow } from '../flights-test.fixtures';
+
+const futureDateFrom = isoDateDaysFromNow(30);
 
 function makeOffer(id: string, total = '100.00'): FlightOffer {
   return {
@@ -26,8 +29,8 @@ function makeOffer(id: string, total = '100.00'): FlightOffer {
         segments: [
           {
             id: 'seg-1',
-            departure: { iataCode: 'HEL', at: '2026-08-01T10:00:00.000Z' },
-            arrival: { iataCode: 'JFK', at: '2026-08-01T12:00:00.000Z' },
+            departure: { iataCode: 'HEL', at: `${futureDateFrom}T10:00:00.000Z` },
+            arrival: { iataCode: 'JFK', at: `${futureDateFrom}T12:00:00.000Z` },
             carrierCode: 'AY',
             number: '15',
             duration: 'PT2H',
@@ -44,7 +47,7 @@ function makeCachedOffer(id: string, total = '100.00'): PreprocessedFlightOffer 
 
 describe('FlightsService', () => {
   const searchDto: SearchFlightsDto = {
-    directions: [{ origin: 'HEL', destination: 'JFK', dateFrom: '2026-08-01' }],
+    directions: [{ origin: 'HEL', destination: 'JFK', dateFrom: futureDateFrom }],
     passengers: { adults: 1 },
     travelClass: 'ECONOMY' as SearchFlightsDto['travelClass'],
     currencyCode: 'USD' as SearchFlightsDto['currencyCode'],
@@ -105,7 +108,7 @@ describe('FlightsService', () => {
     searchStore.getSearchIdByQuery.mockResolvedValue('search-cached');
     searchStore.getSearchResults.mockResolvedValue({
       offers: [offer],
-      expiresAt: '2026-08-01T12:00:00.000Z',
+      expiresAt: `${futureDateFrom}T12:00:00.000Z`,
       queryHash: 'ignored',
       context: { passengers: { adults: 1, children: 0, infants: 0, seatedInfants: 0 } },
     });
@@ -124,7 +127,9 @@ describe('FlightsService', () => {
     const offer = makeOffer('offer-fresh');
     searchStore.getSearchIdByQuery.mockResolvedValue(null);
     searchStore.acquireSearchLock.mockResolvedValue(true);
-    searchStore.saveSearchResults.mockResolvedValue({ expiresAt: '2026-08-01T12:00:00.000Z' });
+    searchStore.saveSearchResults.mockResolvedValue({
+      expiresAt: `${futureDateFrom}T12:00:00.000Z`,
+    });
     searchStore.saveSearchIdByQueryIfAbsent.mockResolvedValue(true);
     provider.searchFlights.mockResolvedValue({ meta: { count: 1 }, data: [offer] });
 
@@ -149,7 +154,7 @@ describe('FlightsService', () => {
     searchStore.waitForSearchIdByQuery.mockResolvedValue('search-peer');
     searchStore.getSearchResults.mockResolvedValue({
       offers: [offer],
-      expiresAt: '2026-08-01T12:00:00.000Z',
+      expiresAt: `${futureDateFrom}T12:00:00.000Z`,
       queryHash: 'q',
       context: { passengers: { adults: 1, children: 0, infants: 0, seatedInfants: 0 } },
     });
@@ -186,11 +191,13 @@ describe('FlightsService', () => {
       .mockResolvedValueOnce(null) // cachedAfterLock
       .mockResolvedValueOnce('search-winner'); // after lost mapping race
     searchStore.acquireSearchLock.mockResolvedValue(true);
-    searchStore.saveSearchResults.mockResolvedValue({ expiresAt: '2026-08-01T12:00:00.000Z' });
+    searchStore.saveSearchResults.mockResolvedValue({
+      expiresAt: `${futureDateFrom}T12:00:00.000Z`,
+    });
     searchStore.saveSearchIdByQueryIfAbsent.mockResolvedValue(false);
     searchStore.getSearchResults.mockResolvedValue({
       offers: [winnerOffer],
-      expiresAt: '2026-08-01T13:00:00.000Z',
+      expiresAt: `${futureDateFrom}T13:00:00.000Z`,
       queryHash: 'q',
     });
     provider.searchFlights.mockResolvedValue({ meta: { count: 1 }, data: [orphanOffer] });
@@ -200,7 +207,7 @@ describe('FlightsService', () => {
     expect(searchStore.deleteSearchResults).toHaveBeenCalled();
     expect(result.searchId).toBe('search-winner');
     expect(result.data).toEqual([{ offerId: 'offer-winner' }]);
-    expect(result.expiresAt).toBe('2026-08-01T13:00:00.000Z');
+    expect(result.expiresAt).toBe(`${futureDateFrom}T13:00:00.000Z`);
     expect(searchStore.releaseSearchLock).toHaveBeenCalled();
   });
 
@@ -212,7 +219,7 @@ describe('FlightsService', () => {
     searchStore.acquireSearchLock.mockResolvedValue(true);
     searchStore.getSearchResults.mockResolvedValue({
       offers: [offer],
-      expiresAt: '2026-08-01T12:00:00.000Z',
+      expiresAt: `${futureDateFrom}T12:00:00.000Z`,
       queryHash: 'q',
     });
 
@@ -231,7 +238,7 @@ describe('FlightsService', () => {
 
     searchStore.getSearchResults.mockResolvedValue({
       offers: [offerB, offerA],
-      expiresAt: '2026-08-01T12:00:00.000Z',
+      expiresAt: `${futureDateFrom}T12:00:00.000Z`,
       queryHash: 'hash-1',
       context: { passengers: { adults: 1, children: 0, infants: 0, seatedInfants: 0 } },
     });

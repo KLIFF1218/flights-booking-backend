@@ -1,7 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { PassengerType } from '@prisma/client';
 import { type TravelerInputDto } from '../dtos/traveler.input.dto';
-import { isInfantType } from 'src/modules/flights/utils/passenger-counts.util';
+import { isInfantType } from 'src/shared/booking/passenger-counts.util';
 import { extractIsInternationalFromSnapshot } from './flight-route.util';
 
 function ageOnDate(birthDate: Date, referenceDate: Date): number {

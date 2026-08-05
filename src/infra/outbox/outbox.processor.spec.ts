@@ -7,7 +7,7 @@ import { KafkaPublisher } from 'src/infra/kafka/kafka.publisher';
 import { BookingEventsPublisher } from 'src/infra/rabbitmq/booking-events.publisher';
 import { PaymentPendingCancelOutboxHandler } from 'src/modules/payment/handlers/payment-pending-cancel.outbox-handler';
 import { CheckoutCleanupOutboxHandler } from 'src/modules/bookings/handlers/checkout-cleanup.outbox-handler';
-import { TicketingFailedOutboxHandler } from 'src/modules/bookings/handlers/ticketing-failed.outbox-handler';
+import { TicketingFailedOutboxHandler } from 'src/modules/ticketing/handlers/ticketing-failed.outbox-handler';
 import { CreateCompensationOutboxHandler } from 'src/modules/bookings/handlers/create-compensation.outbox-handler';
 import { BookingMetricsService } from 'src/modules/bookings/metrics/booking-metrics.service';
 import { createBookingMetricsMock } from 'src/modules/bookings/metrics/booking-metrics.mock';

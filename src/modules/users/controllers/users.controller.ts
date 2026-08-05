@@ -7,7 +7,7 @@ import {
   ApiBody,
   ApiOkResponse,
 } from '@nestjs/swagger';
-import { UsersService } from '../users.service';
+import { UsersService } from '../services/users.service';
 import { UserResponseDto } from '../dtos/user-response.dto';
 import { Protected, Authorized } from 'src/common/decorators';
 import { UpdateSettingsDto } from '../dtos/update-settings.dto';

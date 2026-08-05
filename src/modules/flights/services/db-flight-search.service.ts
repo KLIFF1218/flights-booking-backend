@@ -6,22 +6,28 @@ import {
   FlightOffer,
   Itinerary,
 } from '../interfaces/flight-offers.interface';
-import { formatDuration } from '../utils/time.util';
-import { buildTimeline } from '../utils/timeline.util';
+import { formatDuration } from '../utils/datetime/time.util';
+import { buildTimeline } from '../utils/datetime/timeline.util';
 import { FlightInstanceWithRelations } from '../providers/prisma/flight-instance.type';
 import { flightInstanceInclude } from '../providers/prisma/flight-instance.include';
-import { combineTravelerPricings } from '../utils/traveler-pricing.util';
-import { mergeLegOfferPrices } from '../utils/fare-charges.util';
-import { isCyclicRoute } from '../utils/route.util';
+import { combineTravelerPricings } from '../utils/pricing/traveler-pricing.util';
+import { mergeLegOfferPrices } from '../utils/pricing/fare-charges.util';
+import { isCyclicRoute } from '../utils/search/route.util';
 import { Airport, FlightStatus } from '@prisma/client';
-import { buildOneWayOffers } from '../utils/offer-builder.util';
-import { buildConnectionLegs, mergeRoundTripLegs } from '../utils/offer-flight-instances.util';
-import { countSeatsRequired } from '../utils/passenger-counts.util';
-import { parseDuration } from '../utils/duration.util';
-import { assertValidRoundTripDirections } from '../utils/validate-search-directions.util';
-import { buildDepartureSearchWindow, matchesLocalDate } from '../utils/timezone-date.util';
-import { getMinTurnaroundMinutes, meetsMinimumTurnaround } from '../utils/turnaround.util';
-import { resolveDefaultSearchCurrency } from 'src/modules/payment/utils/payment-defaults.util';
+import { buildOneWayOffers } from '../utils/offer/offer-builder.util';
+import {
+  buildConnectionLegs,
+  mergeRoundTripLegs,
+} from '../utils/offer/offer-flight-instances.util';
+import { countSeatsRequired } from 'src/shared/booking/passenger-counts.util';
+import { parseDuration } from '../utils/datetime/duration.util';
+import { assertValidRoundTripDirections } from '../utils/search/validate-search-directions.util';
+import {
+  buildDepartureSearchWindow,
+  matchesLocalDate,
+} from 'src/shared/datetime/timezone-date.util';
+import { getMinTurnaroundMinutes, meetsMinimumTurnaround } from '../utils/search/turnaround.util';
+import { resolveDefaultSearchCurrency } from 'src/shared/currency/payment-defaults.util';
 
 const MIN_CONNECTION_MINUTES = 45;
 const MAX_CONNECTION_MINUTES = 6 * 60;
@@ -35,21 +41,28 @@ function resolveMaxCachedOffers(limit: number, maxCachedOffers: number): number 
 
 @Injectable()
 export class DbFlightsSearchProvider {
-  private static readonly airportCache = new Map<string, Airport>();
+  private static readonly AIRPORT_CACHE_TTL_MS = 5 * 60 * 1000;
+  private static readonly airportCache = new Map<string, { airport: Airport; expiresAt: number }>();
 
   constructor(private readonly prisma: PrismaService) {}
 
   private async getCachedAirport(code: string): Promise<Airport | null> {
     const cached = DbFlightsSearchProvider.airportCache.get(code);
-    if (cached) return cached;
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.airport;
+    }
 
     const airport = await this.prisma.airport.findUnique({
       where: { iataCode: code },
     });
 
     if (airport) {
-      DbFlightsSearchProvider.airportCache.set(code, airport);
+      DbFlightsSearchProvider.airportCache.set(code, {
+        airport,
+        expiresAt: Date.now() + DbFlightsSearchProvider.AIRPORT_CACHE_TTL_MS,
+      });
     }
+
     return airport;
   }
 

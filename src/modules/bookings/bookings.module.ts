@@ -20,7 +20,6 @@ import { BookingMetricsModule } from './metrics/booking-metrics.module';
 import { BookingTicketService } from './services/booking-ticket.service';
 import { BookingIdempotencyService } from './services/booking-idempotency.service';
 import { CheckoutCleanupOutboxHandler } from './handlers/checkout-cleanup.outbox-handler';
-import { TicketingFailedOutboxHandler } from './handlers/ticketing-failed.outbox-handler';
 import { CreateCompensationOutboxHandler } from './handlers/create-compensation.outbox-handler';
 
 @Module({
@@ -47,13 +46,8 @@ import { CreateCompensationOutboxHandler } from './handlers/create-compensation.
     BookingTicketService,
     BookingIdempotencyService,
     CheckoutCleanupOutboxHandler,
-    TicketingFailedOutboxHandler,
     CreateCompensationOutboxHandler,
   ],
-  exports: [
-    CheckoutCleanupOutboxHandler,
-    TicketingFailedOutboxHandler,
-    CreateCompensationOutboxHandler,
-  ],
+  exports: [CheckoutCleanupOutboxHandler, CreateCompensationOutboxHandler],
 })
 export class BookingsModule {}

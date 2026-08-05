@@ -1,18 +1,12 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
-import { Currency, Prisma, SeatType, TravelClass } from '@prisma/client';
+import { Currency, Prisma } from '@prisma/client';
 
 import { FlightsSearchStore } from '../../flights/services/flights-cache.service';
-import {
-  SeatMapDto,
-  SeatMapResponseDto,
-  GridCell,
-  SeatFeature,
-  SingleSegmentSeatMapResponse,
-} from '../dtos/seatmap.dto';
+import { SeatMapDto, SeatMapResponseDto, SingleSegmentSeatMapResponse } from '../dtos/seatmap.dto';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
-import { resolveSeatPriceInCurrency } from '../utils/seat-price.util';
 import { MetricsService } from 'src/infra/metrics/metrics.service';
 import { runSafely } from 'src/common/utils/safe-metrics.util';
+import { buildSegmentSeatMap, type SegmentSeatMapInstance } from './seat-grid.builder';
 
 const seatMapInstanceInclude = {
   aircraft: {
@@ -27,17 +21,13 @@ const seatMapInstanceInclude = {
   fares: {
     take: 1,
   },
-  seats: {
-    include: {
-      seatHolds: true,
-      seatAssignments: true,
-    },
-  },
 } satisfies Prisma.FlightInstanceInclude;
 
 type SeatMapFlightInstance = Prisma.FlightInstanceGetPayload<{
   include: typeof seatMapInstanceInclude;
-}>;
+}> & {
+  seats: SegmentSeatMapInstance['seats'];
+};
 
 type SeatMapSegmentContext = {
   segmentId: string;
@@ -53,12 +43,6 @@ export class SeatMapsService {
   ) {}
 
   async getSeatMapByOffer(dto: SeatMapDto): Promise<SeatMapResponseDto> {
-    const offer = await this.searchStore.getOffer(dto.searchId, dto.offerId);
-
-    if (!offer) {
-      throw new NotFoundException('Offer not found');
-    }
-
     return this.getSeatMap(dto);
   }
 
@@ -93,10 +77,28 @@ export class SeatMapsService {
       }
 
       if (!instance.seats.length) {
-        return { unavailable: true, seatMaps: [] };
+        continue;
       }
 
-      seatMaps.push(this.buildSegmentSeatMap(instance, context.segmentId, targetCurrency, fxRates));
+      const segmentSeatMap = buildSegmentSeatMap(
+        instance,
+        context.segmentId,
+        targetCurrency,
+        fxRates,
+      );
+
+      runSafely(() =>
+        this.metrics.updateSeatsAvailable(
+          segmentSeatMap.availableSeatsCount,
+          segmentSeatMap.aircraft,
+        ),
+      );
+
+      seatMaps.push(segmentSeatMap);
+    }
+
+    if (!seatMaps.length) {
+      return { unavailable: true, seatMaps: [] };
     }
 
     const result: SeatMapResponseDto = {
@@ -136,6 +138,7 @@ export class SeatMapsService {
     segmentContexts: SeatMapSegmentContext[],
   ): Promise<SeatMapFlightInstance[]> {
     const instanceIds = [...new Set(segmentContexts.map((context) => context.flightInstanceId))];
+    const segmentIds = [...new Set(segmentContexts.map((context) => context.segmentId))];
     const now = new Date();
 
     return this.prisma.flightInstance.findMany({
@@ -143,152 +146,25 @@ export class SeatMapsService {
         id: { in: instanceIds },
       },
       include: {
-        aircraft: seatMapInstanceInclude.aircraft,
-        fares: seatMapInstanceInclude.fares,
+        ...seatMapInstanceInclude,
         seats: {
           include: {
             seatHolds: {
               where: {
+                segmentId: { in: segmentIds },
                 expiresAt: {
                   gt: now,
                 },
               },
             },
-            seatAssignments: true,
+            seatAssignments: {
+              where: {
+                segmentId: { in: segmentIds },
+              },
+            },
           },
         },
       },
     });
-  }
-
-  private buildSegmentSeatMap(
-    instance: SeatMapFlightInstance,
-    segmentId: string,
-    targetCurrency: Currency,
-    fxRates?: Record<string, number>,
-  ): SingleSegmentSeatMapResponse {
-    if (!instance.aircraft?.aircraftLayout) {
-      throw new ConflictException('Aircraft layout is not configured');
-    }
-
-    const sourceCurrency = instance.fares[0]?.currency;
-    if (!sourceCurrency) {
-      throw new ConflictException('Fare currency is not configured for this flight');
-    }
-
-    const layout = instance.aircraft.aircraftLayout;
-    const width = layout.width;
-    const length = layout.length;
-
-    const grid: GridCell[][] = Array.from({ length }, () =>
-      Array.from({ length: width }, () => ({
-        type: 'EMPTY' as const,
-      })),
-    );
-
-    let availableSeatsCount = 0;
-    let cabin: TravelClass = TravelClass.ECONOMY;
-
-    for (const seat of instance.seats) {
-      if (seat.x < 0 || seat.x >= width || seat.y < 0 || seat.y >= length) {
-        throw new ConflictException(
-          `Seat ${seat.seatNumber} is out of bounds (${seat.x}, ${seat.y})`,
-        );
-      }
-
-      if (grid[seat.y][seat.x].type === 'SEAT') {
-        throw new ConflictException(
-          `Seat collision for ${seat.seatNumber} at coordinates (${seat.x}, ${seat.y})`,
-        );
-      }
-
-      const hasActiveHold = seat.seatHolds.some((hold) => hold.segmentId === segmentId);
-      const isAssigned = seat.seatAssignments.some(
-        (assignment) => assignment.segmentId === segmentId,
-      );
-      const isAvailable = seat.status === 'AVAILABLE' && !hasActiveHold && !isAssigned;
-
-      if (isAvailable) {
-        availableSeatsCount++;
-      }
-
-      const features: SeatFeature[] = [];
-
-      if (seat.isExitRow) {
-        features.push(SeatFeature.EXIT_ROW);
-      }
-
-      if (seat.isExtraLegroom) {
-        features.push(SeatFeature.EXTRA_LEGROOM);
-      }
-
-      if (seat.isPremium) {
-        features.push(SeatFeature.PREMIUM);
-      }
-
-      const seatClass = seat.travelClass ?? TravelClass.ECONOMY;
-      const seatType = seat.seatType ?? SeatType.MIDDLE;
-
-      if (seatClass === TravelClass.FIRST) {
-        cabin = TravelClass.FIRST;
-      } else if (seatClass === TravelClass.BUSINESS && cabin !== TravelClass.FIRST) {
-        cabin = TravelClass.BUSINESS;
-      } else if (seatClass === TravelClass.PREMIUM_ECONOMY && cabin === TravelClass.ECONOMY) {
-        cabin = TravelClass.PREMIUM_ECONOMY;
-      }
-
-      grid[seat.y][seat.x] = {
-        type: 'SEAT',
-        seatNumber: seat.seatNumber,
-        isAvailable,
-        minPrice: isAvailable
-          ? resolveSeatPriceInCurrency(
-              {
-                price: seat.price,
-                seatType,
-                isExitRow: seat.isExitRow,
-                isExtraLegroom: seat.isExtraLegroom,
-                isPremium: seat.isPremium,
-                travelClass: seatClass,
-              },
-              sourceCurrency,
-              targetCurrency,
-              fxRates,
-            )
-          : null,
-        seatType,
-        deck: seat.deck,
-        status: seat.status,
-        travelClass: seatClass,
-        features,
-      };
-    }
-
-    for (const facility of layout.facilities) {
-      if (facility.x < 0 || facility.x >= width || facility.y < 0 || facility.y >= length) {
-        continue;
-      }
-
-      if (grid[facility.y][facility.x].type !== 'EMPTY') {
-        continue;
-      }
-
-      grid[facility.y][facility.x] = {
-        type: 'FACILITY',
-        code: facility.type,
-      };
-    }
-
-    const aircraftCode = instance.aircraft?.code ?? 'UNKNOWN';
-
-    runSafely(() => this.metrics.updateSeatsAvailable(availableSeatsCount, aircraftCode));
-
-    return {
-      segmentId,
-      aircraft: aircraftCode,
-      cabin,
-      availableSeatsCount,
-      grid,
-    };
   }
 }

@@ -1,65 +1,58 @@
 import { Currency, PaymentProvider } from '@prisma/client';
-import { YookassaProvider } from '../providers/yoomoney/yoomoney.service';
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
+import { Logger } from 'nestjs-pino';
+import type { PaymentWebhookIngressContext } from '../interfaces/payment.provider.interface';
+import type { PaymentWebhookResult } from '../interfaces/payment-webhook-result.dto';
 import { PaymentProviderCreateDto } from '../dtos/payment-provider.create.dto';
-import { StripeService } from '../providers/stripe/stripe.service';
+import { PaymentProviderRegistry } from './payment-provider.registry';
 
 @Injectable()
 export class PaymentProviderService {
   constructor(
-    private readonly yookassa: YookassaProvider,
-    private readonly stripe: StripeService,
-    // private readonly stars: StarsProvider,
+    private readonly registry: PaymentProviderRegistry,
+    private readonly logger: Logger,
   ) {}
 
   get(dto: PaymentProviderCreateDto) {
-    const { amount, currency, idempotencyKey, transactionId, bookingId, provider } = dto;
-    switch (dto.provider) {
-      case PaymentProvider.YOOKASSA:
-        return this.yookassa.createPayment({
-          transactionId,
-          bookingId,
-          amount: Number(amount),
-          currency: currency as Currency,
-          idempotencyKey,
-        });
-      case PaymentProvider.STRIPE:
-        return this.stripe.createPayment({
-          transactionId,
-          bookingId,
-          amount: Number(amount),
-          currency: currency as Currency,
-          idempotencyKey,
-        });
-      default:
-        throw new BadRequestException(`Unsupported payment provider: ${provider}`);
-    }
+    const { amount, currency, idempotencyKey, transactionId, bookingId } = dto;
+
+    return this.registry.get(dto.provider as PaymentProvider).createPayment({
+      transactionId,
+      bookingId,
+      amount: Number(amount),
+      currency: currency as Currency,
+      idempotencyKey,
+    });
   }
 
   async getPendingPaymentRedirectUrl(
     provider: PaymentProvider,
     externalId: string,
   ): Promise<string | null> {
-    switch (provider) {
-      case PaymentProvider.YOOKASSA:
-        return this.yookassa.getPendingPaymentRedirectUrl(externalId);
-      case PaymentProvider.STRIPE:
-        return this.stripe.getOpenCheckoutSessionUrl(externalId);
-      default:
-        throw new BadRequestException(`Unsupported payment provider: ${provider}`);
-    }
+    return this.registry.get(provider).getPendingPaymentRedirectUrl(externalId);
   }
 
   async cancelPendingPayment(provider: PaymentProvider, externalId: string): Promise<void> {
-    switch (provider) {
-      case PaymentProvider.YOOKASSA:
-        await this.yookassa.cancelPendingPaymentIfNeeded(externalId);
-        return;
-      case PaymentProvider.STRIPE:
-        await this.stripe.cancelPendingCheckoutSession(externalId);
-        return;
-      default:
-        throw new BadRequestException(`Unsupported payment provider: ${provider}`);
+    await this.registry.get(provider).cancelPendingPayment(externalId);
+  }
+
+  async cancelPendingPaymentBestEffort(
+    provider: PaymentProvider,
+    externalId: string,
+    context: { transactionId: string },
+  ): Promise<void> {
+    try {
+      await this.cancelPendingPayment(provider, externalId);
+    } catch (error: unknown) {
+      this.logger.warn(
+        {
+          err: error instanceof Error ? error : String(error),
+          transactionId: context.transactionId,
+          provider,
+          externalId,
+        },
+        'Failed to cancel pending payment at provider',
+      );
     }
   }
 
@@ -68,15 +61,62 @@ export class PaymentProviderService {
     paymentId: string,
     idempotencyKey?: string,
   ): Promise<void> {
-    switch (provider) {
-      case PaymentProvider.YOOKASSA:
-        await this.yookassa.refundPayment(paymentId);
-        return;
-      case PaymentProvider.STRIPE:
-        await this.stripe.refundPayment(paymentId, idempotencyKey);
-        return;
-      default:
-        throw new BadRequestException(`Unsupported payment provider: ${provider}`);
+    await this.registry.get(provider).refundPayment(paymentId, idempotencyKey);
+  }
+
+  async captureAuthorizedPayment(provider: PaymentProvider, externalId: string): Promise<void> {
+    const adapter = this.registry.get(provider);
+
+    if (!adapter.captureAuthorizedPayment) {
+      throw new BadRequestException(
+        `Provider ${provider} does not support capture after authorize`,
+      );
     }
+
+    await adapter.captureAuthorizedPayment(externalId);
+  }
+
+  supportsCaptureAfterAuthorize(provider: PaymentProvider): boolean {
+    return typeof this.registry.get(provider).captureAuthorizedPayment === 'function';
+  }
+
+  verifyWebhookIngress(provider: PaymentProvider, context: PaymentWebhookIngressContext): void {
+    const adapter = this.registry.get(provider);
+
+    if (!adapter.verifyWebhookIngress) {
+      throw new BadRequestException(
+        `Provider ${provider} does not support webhook ingress verification`,
+      );
+    }
+
+    adapter.verifyWebhookIngress(context);
+  }
+
+  async parseWebhookIngress(
+    provider: PaymentProvider,
+    context: PaymentWebhookIngressContext,
+  ): Promise<unknown> {
+    const adapter = this.registry.get(provider);
+
+    if (!adapter.parseWebhookIngress) {
+      throw new BadRequestException(
+        `Provider ${provider} does not support webhook ingress parsing`,
+      );
+    }
+
+    return adapter.parseWebhookIngress(context);
+  }
+
+  async handleWebhook(
+    provider: PaymentProvider,
+    payload: unknown,
+  ): Promise<PaymentWebhookResult | null> {
+    const adapter = this.registry.get(provider);
+
+    if (!adapter.handleWebhook) {
+      throw new BadRequestException(`Provider ${provider} does not support webhooks`);
+    }
+
+    return adapter.handleWebhook(payload);
   }
 }

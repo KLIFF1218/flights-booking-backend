@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { BookingStatus, Prisma, TransactionStatus } from '@prisma/client';
+import { BookingStatus, Prisma, SeatStatus, TransactionStatus } from '@prisma/client';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { resolveSeatHoldExpiresAt } from '../utils/seat-hold.util';
+import {
+  RELEASE_EXPIRED_HOLDS_BATCH_SIZE,
+  RELEASE_EXPIRED_HOLDS_MAX_BATCHES_PER_RUN,
+} from '../constants/seat-hold.constants';
 import { runWithConcurrency } from 'src/common/utils/concurrent.util';
 import { BookingMetricsService } from '../metrics/booking-metrics.service';
 import { MetricsService } from 'src/infra/metrics/metrics.service';
@@ -46,13 +50,31 @@ export class SeatReleaseService {
 
     if (seatIds.length > 0) {
       await tx.flightSeat.updateMany({
-        where: { id: { in: seatIds }, status: 'RESERVED' },
-        data: { status: 'AVAILABLE' },
+        where: { id: { in: seatIds }, status: SeatStatus.RESERVED },
+        data: { status: SeatStatus.AVAILABLE },
       });
     }
 
     await tx.seatAssignment.deleteMany({ where: { bookingId } });
     this.bookingMetrics.recordSeatRelease(reason);
+  }
+
+  async confirmSeatsForPaidBooking(bookingId: string, tx: Prisma.TransactionClient): Promise<void> {
+    const assignments = await tx.seatAssignment.findMany({
+      where: { bookingId },
+      select: { flightSeatId: true },
+    });
+
+    const seatIds = assignments.map((assignment) => assignment.flightSeatId);
+
+    if (seatIds.length > 0) {
+      await tx.flightSeat.updateMany({
+        where: { id: { in: seatIds } },
+        data: { status: SeatStatus.BOOKED },
+      });
+    }
+
+    await tx.seatHold.deleteMany({ where: { bookingId } });
   }
 
   async revertCheckoutPreparation(bookingId: string): Promise<void> {
@@ -81,65 +103,81 @@ export class SeatReleaseService {
     });
   }
 
-  async releaseExpiredHolds(now = new Date()): Promise<number> {
+  async releaseExpiredHolds(
+    now = new Date(),
+    batchSize = RELEASE_EXPIRED_HOLDS_BATCH_SIZE,
+    maxBatches = RELEASE_EXPIRED_HOLDS_MAX_BATCHES_PER_RUN,
+  ): Promise<number> {
     const startedAt = Date.now();
 
     try {
-      const expiredHolds = await this.prisma.seatHold.findMany({
-        where: { expiresAt: { lt: now } },
-        select: {
-          id: true,
-          bookingId: true,
-          flightSeatId: true,
-          travelerId: true,
-          segmentId: true,
-          createdAt: true,
-        },
-      });
+      let totalReleased = 0;
 
-      if (expiredHolds.length === 0) {
-        this.bookingMetrics.recordMaintenanceRun('release_expired_holds', 'success');
-        this.bookingMetrics.observeMaintenanceDuration(
-          'release_expired_holds',
-          (Date.now() - startedAt) / 1000,
-        );
-        return 0;
-      }
+      for (let batchIndex = 0; batchIndex < maxBatches; batchIndex += 1) {
+        const releasedInBatch = await this.releaseExpiredHoldsBatch(now, batchSize);
+        totalReleased += releasedInBatch;
 
-      const holdsByBooking = new Map<string, ExpiredSeatHold[]>();
-
-      for (const hold of expiredHolds) {
-        const group = holdsByBooking.get(hold.bookingId) ?? [];
-        group.push(hold);
-        holdsByBooking.set(hold.bookingId, group);
-      }
-
-      let releasedCount = 0;
-
-      await runWithConcurrency([...holdsByBooking.entries()], 10, async ([bookingId, holds]) => {
-        for (const hold of holds) {
-          runSafely(() =>
-            this.metrics.recordSeatHoldDuration(
-              Math.max(0, (now.getTime() - hold.createdAt.getTime()) / 1000),
-              'expired',
-            ),
-          );
+        if (releasedInBatch === 0) {
+          break;
         }
-        releasedCount += await this.releaseExpiredHoldsForBooking(bookingId, holds, now);
-      });
+      }
 
       this.bookingMetrics.recordMaintenanceRun('release_expired_holds', 'success');
       this.bookingMetrics.observeMaintenanceDuration(
         'release_expired_holds',
         (Date.now() - startedAt) / 1000,
       );
-      this.bookingMetrics.recordMaintenanceItemsProcessed('release_expired_holds', releasedCount);
+      this.bookingMetrics.recordMaintenanceItemsProcessed('release_expired_holds', totalReleased);
 
-      return releasedCount;
+      return totalReleased;
     } catch (error) {
       this.bookingMetrics.recordMaintenanceRun('release_expired_holds', 'failure');
       throw error;
     }
+  }
+
+  private async releaseExpiredHoldsBatch(now: Date, batchSize: number): Promise<number> {
+    const expiredHolds = await this.prisma.seatHold.findMany({
+      where: { expiresAt: { lt: now } },
+      orderBy: { expiresAt: 'asc' },
+      select: {
+        id: true,
+        bookingId: true,
+        flightSeatId: true,
+        travelerId: true,
+        segmentId: true,
+        createdAt: true,
+      },
+      take: batchSize,
+    });
+
+    if (expiredHolds.length === 0) {
+      return 0;
+    }
+
+    const holdsByBooking = new Map<string, ExpiredSeatHold[]>();
+
+    for (const hold of expiredHolds) {
+      const group = holdsByBooking.get(hold.bookingId) ?? [];
+      group.push(hold);
+      holdsByBooking.set(hold.bookingId, group);
+    }
+
+    let releasedCount = 0;
+
+    await runWithConcurrency([...holdsByBooking.entries()], 10, async ([bookingId, holds]) => {
+      for (const hold of holds) {
+        runSafely(() =>
+          this.metrics.recordSeatHoldDuration(
+            Math.max(0, (now.getTime() - hold.createdAt.getTime()) / 1000),
+            'expired',
+          ),
+        );
+      }
+      releasedCount += await this.releaseExpiredHoldsForBooking(bookingId, holds, now);
+    });
+
+    return releasedCount;
   }
 
   private async releaseExpiredHoldsForBooking(

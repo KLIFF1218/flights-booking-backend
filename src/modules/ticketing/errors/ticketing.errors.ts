@@ -6,6 +6,7 @@ export const TicketingErrorCode = {
   NO_TRAVELERS: 'NO_TRAVELERS',
   PRICING_NOT_FOUND: 'PRICING_NOT_FOUND',
   INCOMPLETE_ISSUANCE: 'INCOMPLETE_ISSUANCE',
+  RETRIES_EXHAUSTED: 'RETRIES_EXHAUSTED',
 } as const;
 
 export type TicketingErrorCode = (typeof TicketingErrorCode)[keyof typeof TicketingErrorCode];

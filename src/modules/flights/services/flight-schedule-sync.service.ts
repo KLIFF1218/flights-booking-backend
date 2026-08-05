@@ -9,8 +9,11 @@ import {
   applyInstanceSchedulesToOffer,
   offerReferencesFlightInstance,
   patchOfferSegmentFromInstance,
-} from '../utils/offer-schedule.util';
-import { isOfferInventoryBookable, resolveOfferBookableSeats } from '../utils/offer-inventory.util';
+} from '../utils/offer/offer-schedule.util';
+import {
+  isOfferInventoryBookable,
+  resolveOfferBookableSeats,
+} from '../utils/offer/offer-inventory.util';
 
 export type RefreshOffersOptions = {
   passengers?: CachedSearchPassengers;

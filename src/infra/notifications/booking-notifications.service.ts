@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Logger } from 'nestjs-pino';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import type { DomainEventEnvelope } from 'src/infra/kafka/domain-event-envelope.util';
-import { UserNotificationsService } from 'src/modules/users/user-notifications.service';
+import { UserNotificationsService } from 'src/modules/users/services/user-notifications.service';
 import {
   isNotificationEventType,
   mapDomainEventToNotification,

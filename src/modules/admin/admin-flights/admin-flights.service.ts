@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { BookingStatus, EnumTransport, FlightStatus } from '@prisma/client';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
-import { computeSeatPriceInCurrency } from 'src/modules/seatmaps/utils/seat-price.util';
+import { computeSeatPriceInCurrency } from 'src/shared/pricing/seat-fee.catalog';
 import { UpdateFlightStatusDto, FlightStatusUpdate } from './dtos/update-flight-status.dto';
 import { CreateFlightInstanceDto } from './dtos/create-flight-instance.dto';
 import { GetFlightsQueryDto } from './dtos/get-flights.dto';
@@ -20,9 +20,9 @@ import {
 import {
   airlineSupportsFirstClass,
   buildFlightFaresFromAdultPrices,
-} from 'src/modules/flights/utils/flight-fare-builder.util';
-import { resolveAirportTimezone } from 'src/modules/flights/utils/airport-timezone.util';
-import { zonedTimeToUtc } from 'src/modules/flights/utils/timezone-date.util';
+} from 'src/modules/flights/utils/offer/flight-fare-builder.util';
+import { resolveAirportTimezone } from 'src/modules/flights/utils/datetime/airport-timezone.util';
+import { zonedTimeToUtc } from 'src/shared/datetime/timezone-date.util';
 
 const NOTIFIABLE_BOOKING_STATUSES: BookingStatus[] = [
   BookingStatus.PNR_CREATED,

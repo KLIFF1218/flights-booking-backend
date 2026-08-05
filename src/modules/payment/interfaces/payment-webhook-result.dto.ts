@@ -13,4 +13,7 @@ export interface PaymentWebhookResult {
 
   /** Low-cardinality payment method (e.g. bank_card, card). */
   method?: string;
+
+  /** YooKassa: capture only after AUTHORIZED is persisted locally. */
+  requiresCaptureAfterAuthorize?: boolean;
 }
