@@ -1,10 +1,10 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import { Logger } from 'nestjs-pino';
 import { SchedulerService } from './scheduler.service';
-import { SeatReleaseService } from '../bookings/services/seat-release.service';
-import { BookingExpirationService } from '../bookings/services/booking-expiration.service';
-import { PaymentAbandonmentService } from '../payment/services/payment-abandonment.service';
-import { PaymentOrphanReconciliationService } from '../payment/services/payment-orphan-reconciliation.service';
+import { SeatReleaseService } from '../../bookings/services/seat-release.service';
+import { BookingExpirationService } from '../../bookings/services/booking-expiration.service';
+import { PaymentAbandonmentService } from '../../payment/services/payment-abandonment.service';
+import { PaymentOrphanReconciliationService } from '../../payment/services/payment-orphan-reconciliation.service';
 import { SchedulerLockService } from './scheduler-lock.service';
 import { SchedulerMetricsService } from './scheduler-metrics.service';
 

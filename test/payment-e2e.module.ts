@@ -7,7 +7,7 @@ import { MetricsModule } from 'src/infra/metrics/metrics.module';
 import { RedisModule } from 'src/infra/redis/redis.module';
 import { AuthModule } from 'src/modules/auth/auth.module';
 import { PaymentController } from 'src/modules/payment/controllers/payment.controller';
-import { PaymentHandler } from 'src/modules/payment/payment.handler';
+import { PaymentHandler } from 'src/modules/payment/handlers/payment.handler';
 import { IdempotencyService } from 'src/modules/payment/services/idempotency.service';
 import { PaymentProviderService } from 'src/modules/payment/services/payment-provider.service';
 import { PaymentAbandonmentService } from 'src/modules/payment/services/payment-abandonment.service';

@@ -1,13 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Logger } from 'nestjs-pino';
-import { SeatReleaseService } from '../bookings/services/seat-release.service';
-import { BookingExpirationService } from '../bookings/services/booking-expiration.service';
-import { PaymentAbandonmentService } from '../payment/services/payment-abandonment.service';
-import { PaymentOrphanReconciliationService } from '../payment/services/payment-orphan-reconciliation.service';
+import { SeatReleaseService } from '../../bookings/services/seat-release.service';
+import { BookingExpirationService } from '../../bookings/services/booking-expiration.service';
+import { PaymentAbandonmentService } from '../../payment/services/payment-abandonment.service';
+import { PaymentOrphanReconciliationService } from '../../payment/services/payment-orphan-reconciliation.service';
 import { SchedulerLockService } from './scheduler-lock.service';
 import { SchedulerMetricsService } from './scheduler-metrics.service';
-import type { BookingMaintenanceStep } from './scheduler.constants';
+import type { BookingMaintenanceStep } from '../constants/scheduler.constants';
 
 @Injectable()
 export class SchedulerService {

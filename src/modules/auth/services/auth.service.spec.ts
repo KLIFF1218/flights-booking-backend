@@ -6,7 +6,7 @@ import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from 'nestjs-pino';
-import { UsersService } from 'src/modules/users/users.service';
+import { UsersService } from 'src/modules/users/services/users.service';
 import { MetricsService } from 'src/infra/metrics/metrics.service';
 import { TokenService } from './token.service';
 import { RefreshService } from './refresh.service';

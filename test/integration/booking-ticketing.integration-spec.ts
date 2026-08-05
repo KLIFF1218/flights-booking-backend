@@ -5,7 +5,7 @@ import { BookingStatus, TransactionStatus, PaymentProvider } from '@prisma/clien
 
 import { AppModule } from 'src/app.module';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
-import { PaymentHandler } from 'src/modules/payment/payment.handler';
+import { PaymentHandler } from 'src/modules/payment/handlers/payment.handler';
 import { OutboxProcessor } from 'src/infra/outbox/outbox.processor';
 import { PdfService } from 'src/infra/pdf/pdf.service';
 import { KafkaPublisher } from 'src/infra/kafka/kafka.publisher';

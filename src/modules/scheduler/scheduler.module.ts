@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
-import { SchedulerService } from './scheduler.service';
-import { FxRatesSchedulerService } from './fx-rates-scheduler.service';
-import { SchedulerLockService } from './scheduler-lock.service';
-import { SchedulerMetricsService } from './scheduler-metrics.service';
+import { SchedulerService } from './services/scheduler.service';
+import { FxRatesSchedulerService } from './services/fx-rates-scheduler.service';
+import { SchedulerLockService } from './services/scheduler-lock.service';
+import { SchedulerMetricsService } from './services/scheduler-metrics.service';
 import { SeatReleaseModule } from '../bookings/seat-release.module';
 import { BookingExpirationModule } from '../bookings/booking-expiration.module';
 import { PaymentAbandonmentModule } from '../payment/payment-abandonment.module';

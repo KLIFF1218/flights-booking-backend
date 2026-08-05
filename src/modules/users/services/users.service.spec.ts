@@ -3,7 +3,7 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { UsersService } from './users.service';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
-import { EmailVerificationService } from '../auth/services/email-verification.service';
+import { EmailVerificationService } from '../../auth/services/email-verification.service';
 
 const mockPrismaService = {
   user: {

@@ -5,16 +5,16 @@ import { BookingStatus, PaymentProvider, TransactionStatus } from '@prisma/clien
 import { PaymentHandler } from './payment.handler';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { OutboxService } from 'src/infra/outbox/outbox.service';
-import { IdempotencyService } from './services/idempotency.service';
-import { PaymentAbandonmentService } from './services/payment-abandonment.service';
-import { PaymentProviderService } from './services/payment-provider.service';
+import { IdempotencyService } from '../services/idempotency.service';
+import { PaymentAbandonmentService } from '../services/payment-abandonment.service';
+import { PaymentProviderService } from '../services/payment-provider.service';
 import { MetricsService } from 'src/infra/metrics/metrics.service';
-import { AuthorizePaymentUseCase } from './use-cases/authorize-payment.use-case';
-import { ConfirmPaymentUseCase } from './use-cases/confirm-payment.use-case';
-import { FailPaymentUseCase } from './use-cases/fail-payment.use-case';
-import { ReconcileLateSuccessUseCase } from './use-cases/reconcile-late-success.use-case';
-import { BookingPaymentLifecycleService } from '../bookings/services/booking-payment-lifecycle.service';
-import { BOOKING_PAYMENT_SEAT_RELEASE_REASON } from '../bookings/constants/booking-seat-lifecycle.constants';
+import { AuthorizePaymentUseCase } from '../use-cases/authorize-payment.use-case';
+import { ConfirmPaymentUseCase } from '../use-cases/confirm-payment.use-case';
+import { FailPaymentUseCase } from '../use-cases/fail-payment.use-case';
+import { ReconcileLateSuccessUseCase } from '../use-cases/reconcile-late-success.use-case';
+import { BookingPaymentLifecycleService } from '../../bookings/services/booking-payment-lifecycle.service';
+import { BOOKING_PAYMENT_SEAT_RELEASE_REASON } from '../../bookings/constants/booking-seat-lifecycle.constants';
 
 describe('PaymentHandler', () => {
   let handler: PaymentHandler;

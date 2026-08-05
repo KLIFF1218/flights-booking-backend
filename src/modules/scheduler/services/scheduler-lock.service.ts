@@ -3,7 +3,7 @@ import { RedisService } from 'src/infra/redis/redis.service';
 import {
   BOOKING_MAINTENANCE_LOCK_KEY,
   BOOKING_MAINTENANCE_LOCK_TTL_SECONDS,
-} from './scheduler.constants';
+} from '../constants/scheduler.constants';
 
 @Injectable()
 export class SchedulerLockService {

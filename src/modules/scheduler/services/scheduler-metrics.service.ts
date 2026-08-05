@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Counter, register } from 'prom-client';
 import { MetricsService } from 'src/infra/metrics/metrics.service';
 import { runSafely } from 'src/common/utils/safe-metrics.util';
-import type { BookingMaintenanceStep } from './scheduler.constants';
+import type { BookingMaintenanceStep } from '../constants/scheduler.constants';
 
 @Injectable()
 export class SchedulerMetricsService {

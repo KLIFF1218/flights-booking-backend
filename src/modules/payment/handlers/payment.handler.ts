@@ -1,34 +1,34 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { TransactionStatus } from '@prisma/client';
-import { PaymentWebhookResult } from './interfaces/payment-webhook-result.dto';
+import { PaymentWebhookResult } from '../interfaces/payment-webhook-result.dto';
 import { Logger } from 'nestjs-pino';
-import { IdempotencyService } from './services/idempotency.service';
+import { IdempotencyService } from '../services/idempotency.service';
 import { MetricsService } from 'src/infra/metrics/metrics.service';
 import { runSafely } from 'src/common/utils/safe-metrics.util';
-import { finalizeTransactionIfPending } from './utils/transaction-state.util';
-import { BookingPaymentLifecycleService } from '../bookings/services/booking-payment-lifecycle.service';
-import { PaymentProviderService } from './services/payment-provider.service';
+import { finalizeTransactionIfPending } from '../utils/transaction-state.util';
+import { BookingPaymentLifecycleService } from '../../bookings/services/booking-payment-lifecycle.service';
+import { PaymentProviderService } from '../services/payment-provider.service';
 import {
   buildPaymentWebhookIdempotencyKey,
   PAYMENT_WEBHOOK_IDEMPOTENCY_OPERATION,
-} from './constants/payment-idempotency.constants';
-import { WEBHOOK_PROCESSING_OUTCOME } from './constants/payment-webhook.constants';
+} from '../constants/payment-idempotency.constants';
+import { WEBHOOK_PROCESSING_OUTCOME } from '../constants/payment-webhook.constants';
 import {
   shouldIgnoreWebhookAsAlreadyFinalized,
   shouldIgnoreWebhookAsAlreadySucceeded,
   shouldReconcileLateSuccess,
-} from './domain/payment-webhook.policy';
-import { AuthorizePaymentUseCase } from './use-cases/authorize-payment.use-case';
-import { ConfirmPaymentUseCase } from './use-cases/confirm-payment.use-case';
-import { FailPaymentUseCase } from './use-cases/fail-payment.use-case';
-import { ReconcileLateSuccessUseCase } from './use-cases/reconcile-late-success.use-case';
+} from '../domain/payment-webhook.policy';
+import { AuthorizePaymentUseCase } from '../use-cases/authorize-payment.use-case';
+import { ConfirmPaymentUseCase } from '../use-cases/confirm-payment.use-case';
+import { FailPaymentUseCase } from '../use-cases/fail-payment.use-case';
+import { ReconcileLateSuccessUseCase } from '../use-cases/reconcile-late-success.use-case';
 import type {
   PaymentWebhookCommand,
   PaymentWebhookTransactionContext,
   WebhookSideEffects,
-} from './use-cases/payment-webhook.types';
-import type { WebhookProcessingOutcome } from './constants/payment-webhook.constants';
+} from '../use-cases/payment-webhook.types';
+import type { WebhookProcessingOutcome } from '../constants/payment-webhook.constants';
 
 @Injectable()
 export class PaymentHandler {

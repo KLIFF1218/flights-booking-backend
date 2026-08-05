@@ -1,14 +1,14 @@
 import { Test, type TestingModule } from '@nestjs/testing';
-import { PaymentService } from './services/payment.service';
+import { PaymentService } from './payment.service';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
-import { PaymentProviderService } from './services/payment-provider.service';
+import { PaymentProviderService } from './payment-provider.service';
 import { MetricsService } from 'src/infra/metrics/metrics.service';
 import { BookingStatus, Currency, PaymentProvider, TransactionStatus } from '@prisma/client';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Logger } from 'nestjs-pino';
-import { BookingExpirationService } from '../bookings/services/booking-expiration.service';
-import { PaymentAbandonmentService } from './services/payment-abandonment.service';
-import { PaymentPendingRollbackService } from './services/payment-pending-rollback.service';
+import { BookingExpirationService } from '../../bookings/services/booking-expiration.service';
+import { PaymentAbandonmentService } from './payment-abandonment.service';
+import { PaymentPendingRollbackService } from './payment-pending-rollback.service';
 
 const mockPrismaService = {
   booking: {

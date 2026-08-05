@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PaymentProvider } from '@prisma/client';
 import { YooKassaWebhookDto } from './dto/yookassa-webhook.dto';
-import { PaymentHandler } from '../payment.handler';
+import { PaymentHandler } from '../handlers/payment.handler';
 import { Logger } from 'nestjs-pino';
 import { MetricsService } from 'src/infra/metrics/metrics.service';
 import { runSafely } from 'src/common/utils/safe-metrics.util';

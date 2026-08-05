@@ -3,7 +3,7 @@ import { OutboxModule } from 'src/infra/outbox/outbox.module';
 import { BookingPaymentLifecycleModule } from '../bookings/booking-payment-lifecycle.module';
 import { PaymentAbandonmentModule } from './payment-abandonment.module';
 import { PaymentProvidersModule } from './payment-providers.module';
-import { PaymentHandler } from './payment.handler';
+import { PaymentHandler } from './handlers/payment.handler';
 import { IdempotencyService } from './services/idempotency.service';
 import { AuthorizePaymentUseCase } from './use-cases/authorize-payment.use-case';
 import { ConfirmPaymentUseCase } from './use-cases/confirm-payment.use-case';

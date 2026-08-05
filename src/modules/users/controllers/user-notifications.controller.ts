@@ -4,7 +4,7 @@ import { Role } from '@prisma/client';
 import type { Observable } from 'rxjs';
 import { Authorized, Protected, Roles } from 'src/common/decorators';
 import { ApiBadRequestError, ApiUserAuthErrors } from 'src/common/swagger/api-responses.decorator';
-import { UserNotificationsService } from '../user-notifications.service';
+import { UserNotificationsService } from '../services/user-notifications.service';
 import { UserNotificationResponseDto } from '../dtos/user-notification-response.dto';
 import { ListNotificationsQueryDto } from '../dtos/list-notifications-query.dto';
 import { MarkAllNotificationsReadResponseDto } from '../dtos/mark-all-notifications-read-response.dto';

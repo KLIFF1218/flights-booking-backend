@@ -6,7 +6,7 @@ import { TicketPersistenceService } from './services/ticket-persistence.service'
 import { TicketingFailureHandler } from './services/ticketing-failure.handler';
 import { PdfModule } from 'src/infra/pdf/pdf.module';
 import { S3Module } from 'src/infra/storage/s3.module';
-import { TicketingProcessor } from './ticketing.processor';
+import { TicketingProcessor } from './services/ticketing.processor';
 import { MailModule } from 'src/infra/mail/mail.module';
 import { OutboxModule } from 'src/infra/outbox/outbox.module';
 import { BookingsCacheModule } from '../bookings/bookings-cache.module';

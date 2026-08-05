@@ -1,9 +1,9 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { PassengerType, Prisma } from '@prisma/client';
 import { SavedPassengersService } from './saved-passengers.service';
-import { SavedPassengerMapper } from './mappers/saved-passenger.mapper';
-import { type CreateSavedPassengerDto } from './dtos/create-saved-passenger.dto';
-import { MAX_SAVED_PASSENGERS } from './constants/saved-passengers.constants';
+import { SavedPassengerMapper } from '../mappers/saved-passenger.mapper';
+import { type CreateSavedPassengerDto } from '../dtos/create-saved-passenger.dto';
+import { MAX_SAVED_PASSENGERS } from '../constants/saved-passengers.constants';
 
 function buildTraveler(overrides: Partial<CreateSavedPassengerDto> = {}): CreateSavedPassengerDto {
   return {

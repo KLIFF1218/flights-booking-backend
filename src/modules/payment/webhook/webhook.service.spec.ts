@@ -1,7 +1,7 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import { Logger } from 'nestjs-pino';
 import { WebhookService } from './webhook.service';
-import { PaymentHandler } from '../payment.handler';
+import { PaymentHandler } from '../handlers/payment.handler';
 import { PaymentProvider, TransactionStatus } from '@prisma/client';
 import { MetricsService } from 'src/infra/metrics/metrics.service';
 import { PaymentProviderService } from '../services/payment-provider.service';

@@ -7,10 +7,10 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { runSerializableTransaction } from 'src/common/utils/run-serializable-transaction.util';
-import { CreateSavedPassengerDto } from './dtos/create-saved-passenger.dto';
-import { SavedPassengerResponseDto } from './dtos/saved-passenger-response.dto';
-import { NormalizedSavedPassenger, SavedPassengerMapper } from './mappers/saved-passenger.mapper';
-import { MAX_SAVED_PASSENGERS } from './constants/saved-passengers.constants';
+import { CreateSavedPassengerDto } from '../dtos/create-saved-passenger.dto';
+import { SavedPassengerResponseDto } from '../dtos/saved-passenger-response.dto';
+import { NormalizedSavedPassenger, SavedPassengerMapper } from '../mappers/saved-passenger.mapper';
+import { MAX_SAVED_PASSENGERS } from '../constants/saved-passengers.constants';
 
 type Tx = Prisma.TransactionClient;
 type SavedPassengerProfile = Prisma.SavedPassengerProfileGetPayload<object>;

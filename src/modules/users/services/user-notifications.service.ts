@@ -4,7 +4,7 @@ import type { Observable } from 'rxjs';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { runSerializableTransaction } from 'src/common/utils/run-serializable-transaction.util';
 import { NotificationRealtimeService } from 'src/infra/notifications/notification-realtime.service';
-import { UserNotificationResponseDto } from './dtos/user-notification-response.dto';
+import { UserNotificationResponseDto } from '../dtos/user-notification-response.dto';
 
 export type CreateUserNotificationInput = {
   userId: string;

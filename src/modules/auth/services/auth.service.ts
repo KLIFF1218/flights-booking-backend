@@ -6,7 +6,7 @@ import { ConfigService } from '@nestjs/config';
 import { Request, Response } from 'express';
 import { Currency, UserStatus } from '@prisma/client';
 import { Logger } from 'nestjs-pino';
-import { UsersService } from 'src/modules/users/users.service';
+import { UsersService } from 'src/modules/users/services/users.service';
 import { MetricsService } from '../../../infra/metrics/metrics.service';
 import { TokenService } from './token.service';
 import { RefreshService } from './refresh.service';

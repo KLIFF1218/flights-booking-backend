@@ -12,7 +12,7 @@ import { Role } from '@prisma/client';
 import { CreateSavedPassengerDto } from '../dtos/create-saved-passenger.dto';
 import { SyncSavedPassengersDto } from '../dtos/sync-saved-passengers.dto';
 import { SavedPassengerResponseDto } from '../dtos/saved-passenger-response.dto';
-import { SavedPassengersService } from '../saved-passengers.service';
+import { SavedPassengersService } from '../services/saved-passengers.service';
 import {
   ApiBadRequestError,
   ApiConflictError,
