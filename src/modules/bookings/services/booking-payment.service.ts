@@ -4,7 +4,7 @@ import { PaymentService } from 'src/modules/payment/services/payment.service';
 import { Logger } from 'nestjs-pino';
 import { BookingSnapshot } from '../interfaces/booking-snapshot.interface';
 import { resolvePaymentProviderFromSnapshot } from '../utils/booking-snapshot.util';
-import { assertPaymentProviderCurrencyCompatible } from 'src/modules/payment/utils/payment-defaults.util';
+import { assertPaymentProviderCurrencyCompatible } from 'src/shared/currency/payment-defaults.util';
 import { BookingStatus, Currency, Prisma } from '@prisma/client';
 
 @Injectable()

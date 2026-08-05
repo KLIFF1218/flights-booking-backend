@@ -21,7 +21,8 @@ import {
   RoundTripRouteConstraint,
   TodayOrFutureDateConstraint,
 } from '../validators/search-directions.validator';
-import { normalizeIataCode } from '../utils/validate-search-directions.util';
+import { normalizeIataCode } from '../utils/search/validate-search-directions.util';
+import { CurrencyCode } from 'src/shared/currency/currency-code.enum';
 
 export enum TravelClass {
   ECONOMY = 'ECONOMY',
@@ -30,11 +31,7 @@ export enum TravelClass {
   FIRST = 'FIRST',
 }
 
-export enum CurrencyCode {
-  USD = 'USD',
-  EUR = 'EUR',
-  RUB = 'RUB',
-}
+export { CurrencyCode };
 
 export class DirectionDto {
   @ApiProperty({ example: 'HEL' })

@@ -21,7 +21,7 @@ import { FlightOffer } from 'src/modules/flights/interfaces/flight-offers.interf
 import {
   extractFlightInstanceIds,
   resolvePrimaryFlightInstanceId,
-} from 'src/modules/flights/utils/offer-flight-instances.util';
+} from 'src/modules/flights/utils/offer/offer-flight-instances.util';
 import { MetricsService } from 'src/infra/metrics/metrics.service';
 import { BookingMetricsService } from '../metrics/booking-metrics.service';
 import { resolveBookingMetricReason } from '../metrics/booking-metrics.util';
@@ -29,7 +29,7 @@ import {
   assertPaymentProviderSupported,
   resolvePaymentProvider,
 } from '../utils/booking-snapshot.util';
-import { assertPaymentProviderCurrencyCompatible } from 'src/modules/payment/utils/payment-defaults.util';
+import { assertPaymentProviderCurrencyCompatible } from 'src/shared/currency/payment-defaults.util';
 import {
   assertPriceWithinTolerance,
   assertPricingQuoteActive,
@@ -37,7 +37,7 @@ import {
 import {
   assertFlightInstancesBookable,
   syncOfferScheduleFromPricing,
-} from 'src/modules/flights/utils/offer-schedule.util';
+} from 'src/modules/flights/utils/offer/offer-schedule.util';
 import {
   reserveFlightInstanceInventory,
   resolveSeatsToReserve,

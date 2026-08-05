@@ -23,26 +23,29 @@ import {
   PreprocessedFlightOffer,
   SortType,
 } from '../types/flights.types';
-import { computeBestScores } from '../utils/best-score.util';
+import { computeBestScores } from '../utils/search/best-score.util';
 import {
   appendFiltersToSearchParams,
   applyFlightFilters,
   buildFilters,
   parseFlightSearchFilters,
-} from '../utils/filter.util';
-import type { FlightSearchFilters } from '../utils/filter.util';
-import { preprocessOffers } from '../utils/preprocess-offers.util';
-import { getFlightSortStrategy, sortFlightOffers } from '../utils/flight-sort-strategies.util';
+} from '../utils/search/filter.util';
+import type { FlightSearchFilters } from '../utils/search/filter.util';
+import { preprocessOffers } from '../utils/search/preprocess-offers.util';
+import {
+  getFlightSortStrategy,
+  sortFlightOffers,
+} from '../utils/search/flight-sort-strategies.util';
 import {
   buildCursor,
   cursorToFakeOffer,
   decodeCursor,
   encodeCursor,
 } from '../../../shared/utils/cursor.util';
-import { buildSearchQueryKey } from '../utils/search-query-key.util';
+import { buildSearchQueryKey } from '../utils/search/search-query-key.util';
 import { validatePassengerCounts } from 'src/shared/booking/passenger-counts.util';
-import { assertValidSearchDirections } from '../utils/validate-search-directions.util';
-import { resolveDefaultSearchCurrencyCode } from 'src/modules/payment/utils/payment-defaults.util';
+import { assertValidSearchDirections } from '../utils/search/validate-search-directions.util';
+import { resolveDefaultSearchCurrencyCode } from 'src/shared/currency/payment-defaults.util';
 import { FlightScheduleSyncService } from './flight-schedule-sync.service';
 
 @Injectable()

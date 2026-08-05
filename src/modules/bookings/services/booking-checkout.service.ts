@@ -25,7 +25,7 @@ import {
   assertPaymentProviderSupported,
   resolvePaymentProviderFromSnapshot,
 } from '../utils/booking-snapshot.util';
-import { assertPaymentProviderCurrencyCompatible } from 'src/modules/payment/utils/payment-defaults.util';
+import { assertPaymentProviderCurrencyCompatible } from 'src/shared/currency/payment-defaults.util';
 import {
   assertBookingStatusAllows,
   BookingOperation,

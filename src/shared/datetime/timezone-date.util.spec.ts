@@ -4,7 +4,7 @@ import {
   formatTimeInTimeZone,
   matchesLocalDate,
   zonedTimeToUtc,
-} from './timezone-date.util';
+} from 'src/shared/datetime/timezone-date.util';
 
 describe('timezone-date.util', () => {
   it('formats a UTC instant using the airport timezone', () => {

@@ -3,7 +3,7 @@ import {
   convertCurrency,
   convertCurrencyWithRates,
   setCurrencyRates,
-} from 'src/modules/flights/utils/currency.util';
+} from 'src/modules/flights/utils/pricing/currency.util';
 import {
   computeSeatPrice,
   computeSeatPriceInCurrency,

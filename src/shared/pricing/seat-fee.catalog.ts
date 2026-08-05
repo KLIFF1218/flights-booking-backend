@@ -2,7 +2,7 @@ import { type SeatType, type TravelClass } from '@prisma/client';
 import {
   convertCurrencyWithRates,
   getCurrencyRates,
-} from 'src/modules/flights/utils/currency.util';
+} from 'src/modules/flights/utils/pricing/currency.util';
 
 /** Attribute-based seat surcharge catalog is defined in USD. */
 const SEAT_FEE_BASE_CURRENCY = 'USD';

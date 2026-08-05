@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { Currency, PaymentProvider } from '@prisma/client';
-import { CurrencyCode } from 'src/modules/flights/dtos/search-flight.request.dto';
+import { CurrencyCode } from './currency-code.enum';
 
 export const SUPPORTED_PAYMENT_PROVIDERS: readonly PaymentProvider[] = [
   PaymentProvider.YOOKASSA,

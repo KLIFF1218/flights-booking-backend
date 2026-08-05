@@ -1,5 +1,5 @@
 import { Currency, PaymentProvider } from '@prisma/client';
-import { CurrencyCode } from 'src/modules/flights/dtos/search-flight.request.dto';
+import { CurrencyCode } from './currency-code.enum';
 import {
   resolveDefaultPaymentProvider,
   resolveDefaultSearchCurrency,

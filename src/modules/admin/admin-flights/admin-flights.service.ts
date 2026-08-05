@@ -20,9 +20,9 @@ import {
 import {
   airlineSupportsFirstClass,
   buildFlightFaresFromAdultPrices,
-} from 'src/modules/flights/utils/flight-fare-builder.util';
-import { resolveAirportTimezone } from 'src/modules/flights/utils/airport-timezone.util';
-import { zonedTimeToUtc } from 'src/modules/flights/utils/timezone-date.util';
+} from 'src/modules/flights/utils/offer/flight-fare-builder.util';
+import { resolveAirportTimezone } from 'src/modules/flights/utils/datetime/airport-timezone.util';
+import { zonedTimeToUtc } from 'src/shared/datetime/timezone-date.util';
 
 const NOTIFIABLE_BOOKING_STATUSES: BookingStatus[] = [
   BookingStatus.PNR_CREATED,
