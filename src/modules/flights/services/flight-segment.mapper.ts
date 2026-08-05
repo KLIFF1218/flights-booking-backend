@@ -1,8 +1,8 @@
 import type { BuiltSegment } from 'src/modules/bookings/types/segment.types';
-import { toSegmentEndpointDto } from '../utils/flight-time.mapper';
-import { buildTimeline } from '../utils/timeline.util';
+import { toSegmentEndpointDto } from '../utils/datetime/flight-time.mapper';
+import { buildTimeline } from '../utils/datetime/timeline.util';
 import type { FlightInstanceWithRelations } from '../providers/prisma/flight-instance.type';
-import { formatDuration } from '../utils/time.util';
+import { formatDuration } from '../utils/datetime/time.util';
 
 export function mapSegments(instance: FlightInstanceWithRelations): BuiltSegment[] {
   const segments = instance.flight.segments;

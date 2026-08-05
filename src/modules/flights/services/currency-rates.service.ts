@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Logger } from 'nestjs-pino';
 import { RedisService } from 'src/infra/redis/redis.service';
 import { SUPPORTED_FX_CURRENCIES, type SupportedFxCurrency } from 'src/config/currency.config';
-import { setCurrencyRates } from '../utils/currency.util';
+import { setCurrencyRates } from '../utils/pricing/currency.util';
 
 const FX_CACHE_KEY = 'fx:rates:USD';
 

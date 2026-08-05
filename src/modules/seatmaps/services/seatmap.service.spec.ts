@@ -9,7 +9,7 @@ import { SeatFeature } from '../dtos/seatmap.dto';
 import {
   convertCurrencyWithRates,
   setCurrencyRates,
-} from 'src/modules/flights/utils/currency.util';
+} from 'src/modules/flights/utils/pricing/currency.util';
 
 const dto = { searchId: 'search-1', offerId: 'offer-1' };
 

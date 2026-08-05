@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { type Prisma, PassengerType } from '@prisma/client';
-import { extractFlightInstanceIds } from 'src/modules/flights/utils/offer-flight-instances.util';
+import { extractFlightInstanceIds } from 'src/modules/flights/utils/offer/offer-flight-instances.util';
 import type { BookingSnapshot } from '../interfaces/booking-snapshot.interface';
 
 function isLapInfantTraveler(traveler: { travelerType?: string; passengerType?: string }): boolean {

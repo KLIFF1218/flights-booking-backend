@@ -1,5 +1,5 @@
 import { resolveAirportTimezone } from './airport-timezone.util';
-import { formatDateInTimeZone, formatTimeInTimeZone } from './timezone-date.util';
+import { formatDateInTimeZone, formatTimeInTimeZone } from 'src/shared/datetime/timezone-date.util';
 
 export type FlightLocalTimeFields = {
   localDate: string;

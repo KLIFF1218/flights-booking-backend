@@ -1,6 +1,6 @@
-import type { FlightOffer } from '../interfaces/flight-offers.interface';
-import type { PreprocessedFlightOffer } from '../types/flights.types';
-import { parseDuration } from './duration.util';
+import type { FlightOffer } from '../../interfaces/flight-offers.interface';
+import type { PreprocessedFlightOffer } from '../../types/flights.types';
+import { parseDuration } from '../datetime/duration.util';
 
 export function preprocessOffers(offers: FlightOffer[]): PreprocessedFlightOffer[] {
   return offers.map((offer) => {

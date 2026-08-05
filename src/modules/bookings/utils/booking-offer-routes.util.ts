@@ -1,5 +1,5 @@
 import type { FlightOffer } from 'src/modules/flights/interfaces/flight-offers.interface';
-import { mapItinerary } from 'src/modules/flights/utils/itinerary.mapper';
+import { mapItinerary } from 'src/modules/flights/utils/offer/itinerary.mapper';
 
 export interface BookingListRoute {
   from: string;

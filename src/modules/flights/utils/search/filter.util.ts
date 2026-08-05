@@ -1,4 +1,4 @@
-import type { PreprocessedFlightOffer } from '../types/flights.types';
+import type { PreprocessedFlightOffer } from '../../types/flights.types';
 
 export type DurationBucket = 'UP_TO_5H' | 'FROM_5_TO_10H' | 'FROM_10_TO_15H' | 'OVER_15H';
 

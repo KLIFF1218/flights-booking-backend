@@ -9,9 +9,12 @@ import {
   isValidIataCode,
   normalizeIataCode,
 } from './validate-search-directions.util';
+import { isoDateDaysFromNow } from '../../flights-test.fixtures';
 
 describe('validate-search-directions.util', () => {
   const referenceDate = new Date('2026-07-19T12:00:00.000Z');
+  const futureDateFrom = isoDateDaysFromNow(30);
+  const futureReturnDate = isoDateDaysFromNow(37);
 
   describe('normalizeIataCode', () => {
     it('trims and uppercases airport codes', () => {
@@ -109,7 +112,7 @@ describe('validate-search-directions.util', () => {
     it('accepts a valid one-way search', () => {
       expect(() =>
         assertValidSearchDirections([
-          { origin: 'HEL', destination: 'JFK', dateFrom: '2026-08-01' },
+          { origin: 'HEL', destination: 'JFK', dateFrom: futureDateFrom },
         ]),
       ).not.toThrow();
     });
@@ -117,7 +120,7 @@ describe('validate-search-directions.util', () => {
     it('rejects invalid IATA codes', () => {
       expect(() =>
         assertValidSearchDirections([
-          { origin: 'HELX', destination: 'JFK', dateFrom: '2026-08-01' },
+          { origin: 'HELX', destination: 'JFK', dateFrom: futureDateFrom },
         ]),
       ).toThrow(new BadRequestException('origin must be a valid IATA code'));
     });
@@ -125,7 +128,7 @@ describe('validate-search-directions.util', () => {
     it('rejects identical origin and destination', () => {
       expect(() =>
         assertValidSearchDirections([
-          { origin: 'HEL', destination: 'HEL', dateFrom: '2026-08-01' },
+          { origin: 'HEL', destination: 'HEL', dateFrom: futureDateFrom },
         ]),
       ).toThrow(new BadRequestException('origin and destination must be different'));
     });
@@ -145,9 +148,9 @@ describe('validate-search-directions.util', () => {
     it('rejects more than two directions', () => {
       expect(() =>
         assertValidSearchDirections([
-          { origin: 'HEL', destination: 'JFK', dateFrom: '2026-08-01' },
-          { origin: 'JFK', destination: 'HEL', dateFrom: '2026-08-07' },
-          { origin: 'HEL', destination: 'LHR', dateFrom: '2026-08-10' },
+          { origin: 'HEL', destination: 'JFK', dateFrom: futureDateFrom },
+          { origin: 'JFK', destination: 'HEL', dateFrom: futureReturnDate },
+          { origin: 'HEL', destination: 'LHR', dateFrom: isoDateDaysFromNow(40) },
         ]),
       ).toThrow(new BadRequestException('Only one-way and round-trip searches are supported'));
     });

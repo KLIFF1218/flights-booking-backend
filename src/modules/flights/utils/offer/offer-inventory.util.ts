@@ -1,6 +1,6 @@
 import { FlightStatus } from '@prisma/client';
-import type { FlightOffer } from '../interfaces/flight-offers.interface';
-import type { FlightInstanceWithRelations } from '../providers/prisma/flight-instance.type';
+import type { FlightOffer } from '../../interfaces/flight-offers.interface';
+import type { FlightInstanceWithRelations } from '../../providers/prisma/flight-instance.type';
 import {
   countSeatsRequired,
   type PassengerCountsInput,

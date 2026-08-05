@@ -3,24 +3,24 @@ import type {
   FlightOffer,
   Itinerary,
   PassengerCounts,
-} from '../interfaces/flight-offers.interface';
-import type { FlightInstanceWithRelations } from '../providers/prisma/flight-instance.type';
+} from '../../interfaces/flight-offers.interface';
+import type { FlightInstanceWithRelations } from '../../providers/prisma/flight-instance.type';
 import {
   buildTravelerPricings,
   calculateTotalPrice,
   MissingFareError,
-} from './traveler-pricing.util';
-import { mapSegments } from '../services/flight-segment.mapper';
-import { buildTimeline } from './timeline.util';
-import { formatDuration } from './time.util';
+} from '../pricing/traveler-pricing.util';
+import { mapSegments } from '../../services/flight-segment.mapper';
+import { buildTimeline } from '../datetime/timeline.util';
+import { formatDuration } from '../datetime/time.util';
 import { buildOneWayLeg } from './offer-flight-instances.util';
-import { buildFarePriceBreakdown, formatOfferPrice } from './fare-charges.util';
+import { buildFarePriceBreakdown, formatOfferPrice } from '../pricing/fare-charges.util';
 import { countSeatsRequired } from 'src/shared/booking/passenger-counts.util';
 import {
   DEFAULT_SEARCH_FARE_BRAND,
   OFFER_SOURCE_INTERNAL_DB,
   resolveFareBrandRules,
-} from '../constants/fare-brand.constants';
+} from '../../constants/fare-brand.constants';
 
 export function buildOneWayOffers(
   instances: FlightInstanceWithRelations[],

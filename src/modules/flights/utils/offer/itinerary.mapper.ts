@@ -1,6 +1,6 @@
-import type { Itinerary } from '../interfaces/flight-offers.interface';
-import { calculateDoorToDoorDurationMinutes } from './duration.util';
-import { toFlightTimeDto } from './flight-time.mapper';
+import type { Itinerary } from '../../interfaces/flight-offers.interface';
+import { calculateDoorToDoorDurationMinutes } from '../datetime/duration.util';
+import { toFlightTimeDto } from '../datetime/flight-time.mapper';
 
 export function mapItinerary(itinerary: Itinerary) {
   const segments = itinerary.segments.map((s) => {

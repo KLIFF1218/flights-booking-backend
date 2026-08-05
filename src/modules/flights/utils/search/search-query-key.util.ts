@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { SearchFlightsDto } from '../dtos';
+import type { SearchFlightsDto } from '../../dtos';
 
 export function buildSearchQueryKey(data: SearchFlightsDto): string {
   const normalized = {

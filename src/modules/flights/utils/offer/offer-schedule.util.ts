@@ -1,11 +1,11 @@
 import { ConflictException } from '@nestjs/common';
-import type { FlightPricingResponse } from '../dtos/flight-pricing.response.dto';
+import type { FlightPricingResponse } from '../../dtos/flight-pricing.response.dto';
 import { FlightStatus } from '@prisma/client';
-import type { FlightOffer } from '../interfaces/flight-offers.interface';
-import type { FlightInstanceWithRelations } from '../providers/prisma/flight-instance.type';
-import { mapSegments } from '../services/flight-segment.mapper';
-import { calculateDoorToDoorDurationMinutes } from './duration.util';
-import { formatDuration } from './time.util';
+import type { FlightOffer } from '../../interfaces/flight-offers.interface';
+import type { FlightInstanceWithRelations } from '../../providers/prisma/flight-instance.type';
+import { mapSegments } from '../../services/flight-segment.mapper';
+import { calculateDoorToDoorDurationMinutes } from '../datetime/duration.util';
+import { formatDuration } from '../datetime/time.util';
 
 function resolveSegmentTimesFromInstance(
   instance: FlightInstanceWithRelations,

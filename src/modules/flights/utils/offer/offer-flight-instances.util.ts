@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import type { FlightOffer, FlightOfferLeg } from '../interfaces/flight-offers.interface';
+import type { FlightOffer, FlightOfferLeg } from '../../interfaces/flight-offers.interface';
 
 export function extractFlightInstanceIds(offer: FlightOffer): string[] {
   const fromLegs = offer.legs?.map((leg) => leg.flightInstanceId).filter(Boolean) ?? [];

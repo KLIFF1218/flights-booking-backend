@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { FlightsSearchStore, type CachedSearchContext } from './flights-cache.service';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { FlightPricingResponse, SeatOptionDto } from '../dtos';
-import { mapItinerary } from '../utils/itinerary.mapper';
+import { mapItinerary } from '../utils/offer/itinerary.mapper';
 import { CalculateSeatPrice } from './calculate-seatprice.service';
 import { Currency, FareBrand, PassengerType } from '@prisma/client';
 import {
@@ -13,9 +13,9 @@ import {
 } from 'src/shared/booking/passenger-counts.util';
 import { FlightInstanceWithFares } from '../types/flights.types';
 import { Logger } from 'nestjs-pino';
-import { convertCurrencyWithRates } from '../utils/currency.util';
-import { buildFarePriceBreakdown, formatOfferPrice } from '../utils/fare-charges.util';
-import { buildTravelerPriceFromBase } from '../utils/traveler-pricing.util';
+import { convertCurrencyWithRates } from '../utils/pricing/currency.util';
+import { buildFarePriceBreakdown, formatOfferPrice } from '../utils/pricing/fare-charges.util';
+import { buildTravelerPriceFromBase } from '../utils/pricing/traveler-pricing.util';
 import {
   createPricingQuoteMeta,
   PRICING_QUOTE_TTL_SECONDS,
@@ -27,7 +27,7 @@ import type { FlightInstanceWithRelations } from '../providers/prisma/flight-ins
 import {
   applyInstanceSchedulesToOffer,
   assertFlightInstancesBookable,
-} from '../utils/offer-schedule.util';
+} from '../utils/offer/offer-schedule.util';
 import type { FlightPricingProvider } from '../providers/flight-pricing.provider';
 import {
   DEFAULT_SEARCH_FARE_BRAND,

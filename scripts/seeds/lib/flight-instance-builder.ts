@@ -1,6 +1,6 @@
 import { Currency, Prisma, TravelClass } from '@prisma/client';
 import { computeSeatPrice } from '../../../src/shared/pricing/seat-fee.catalog';
-import { buildFlightFaresFromAdultPrices } from '../../../src/modules/flights/utils/flight-fare-builder.util';
+import { buildFlightFaresFromAdultPrices } from '../../../src/modules/flights/utils/offer/flight-fare-builder.util';
 import type { SeedPrisma } from './prisma-client';
 
 const FARE_MULTIPLIERS: Record<TravelClass, number> = {

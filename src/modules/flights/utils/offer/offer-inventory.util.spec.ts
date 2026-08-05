@@ -1,5 +1,5 @@
 import { FlightStatus } from '@prisma/client';
-import type { FlightOffer } from '../interfaces/flight-offers.interface';
+import type { FlightOffer } from '../../interfaces/flight-offers.interface';
 import { isOfferInventoryBookable, resolveOfferBookableSeats } from './offer-inventory.util';
 
 function buildOffer(instanceId: string, seats = 10): FlightOffer {

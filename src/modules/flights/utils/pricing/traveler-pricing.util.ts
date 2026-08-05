@@ -1,10 +1,10 @@
 import type { Currency, FareBrand, PassengerType, TravelClass } from '@prisma/client';
-import type { PassengerCounts, TravelerPricing } from '../interfaces/flight-offers.interface';
-import type { FlightInstanceWithRelations } from '../providers/prisma/flight-instance.type';
+import type { PassengerCounts, TravelerPricing } from '../../interfaces/flight-offers.interface';
+import type { FlightInstanceWithRelations } from '../../providers/prisma/flight-instance.type';
 import { convertCurrency } from './currency.util';
-import type { Fare } from '../types/flights.types';
+import type { Fare } from '../../types/flights.types';
 import { buildFarePriceBreakdown } from './fare-charges.util';
-import { DEFAULT_SEARCH_FARE_BRAND } from '../constants/fare-brand.constants';
+import { DEFAULT_SEARCH_FARE_BRAND } from '../../constants/fare-brand.constants';
 
 export class MissingFareError extends Error {
   constructor(

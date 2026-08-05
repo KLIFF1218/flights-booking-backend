@@ -1,7 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
-import type { FlightDirection } from '../interfaces/flight-offers.interface';
-import { resolveAirportTimezone } from './airport-timezone.util';
-import { formatDateInTimeZone } from './timezone-date.util';
+import type { FlightDirection } from '../../interfaces/flight-offers.interface';
+import { resolveAirportTimezone } from '../datetime/airport-timezone.util';
+import { formatDateInTimeZone } from 'src/shared/datetime/timezone-date.util';
 
 export const IATA_CODE_PATTERN = /^[A-Z]{3}$/;
 export const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;

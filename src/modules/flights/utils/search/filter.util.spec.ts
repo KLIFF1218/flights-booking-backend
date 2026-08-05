@@ -1,4 +1,4 @@
-import type { PreprocessedFlightOffer } from '../types/flights.types';
+import type { PreprocessedFlightOffer } from '../../types/flights.types';
 import { applyFlightFilters, buildFilters, parseFlightSearchFilters } from './filter.util';
 
 function buildOffer(params: {

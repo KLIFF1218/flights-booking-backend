@@ -1,5 +1,5 @@
 import { mapItinerary } from './itinerary.mapper';
-import type { Itinerary } from '../interfaces/flight-offers.interface';
+import type { Itinerary } from '../../interfaces/flight-offers.interface';
 
 describe('mapItinerary', () => {
   it('uses door-to-door duration including layovers', () => {

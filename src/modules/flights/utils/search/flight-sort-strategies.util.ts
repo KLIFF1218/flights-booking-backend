@@ -2,7 +2,7 @@ import {
   type PreprocessedFlightOffer,
   type SortStrategy,
   type SortType,
-} from '../types/flights.types';
+} from '../../types/flights.types';
 
 export const FLIGHT_SORT_STRATEGIES: Record<SortType, SortStrategy> = {
   CHEAPEST: {

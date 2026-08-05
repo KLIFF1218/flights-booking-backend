@@ -3,7 +3,7 @@ import {
   ValidatorConstraintInterface,
   ValidationArguments,
 } from 'class-validator';
-import { resolveAirportTimezone } from '../utils/airport-timezone.util';
+import { resolveAirportTimezone } from '../utils/datetime/airport-timezone.util';
 import {
   isDistinctOriginDestination,
   isIsoDateString,
@@ -11,7 +11,7 @@ import {
   isRoundTripRouteValid,
   isTodayOrFutureIsoDate,
   isValidIataCode,
-} from '../utils/validate-search-directions.util';
+} from '../utils/search/validate-search-directions.util';
 
 type DirectionLike = {
   origin: string;

@@ -1,4 +1,4 @@
-import type { PreprocessedFlightOffer } from '../types/flights.types';
+import type { PreprocessedFlightOffer } from '../../types/flights.types';
 
 export function computeBestScores(offers: PreprocessedFlightOffer[]): void {
   if (offers.length === 0) return;

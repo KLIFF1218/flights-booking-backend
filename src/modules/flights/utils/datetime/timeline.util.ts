@@ -1,7 +1,11 @@
 import type { FlightInstanceWithRelations } from 'src/modules/bookings/types/prisma.types';
-import type { SegmentTimeline } from '../interfaces/segment-timeline.interface';
+import type { SegmentTimeline } from '../../interfaces/segment-timeline.interface';
 import { resolveAirportTimezone } from './airport-timezone.util';
-import { addDaysToIsoDate, formatDateInTimeZone, zonedTimeToUtc } from './timezone-date.util';
+import {
+  addDaysToIsoDate,
+  formatDateInTimeZone,
+  zonedTimeToUtc,
+} from 'src/shared/datetime/timezone-date.util';
 import { timeStringOf } from './time.util';
 
 type SegmentWithDepartureAirport = {

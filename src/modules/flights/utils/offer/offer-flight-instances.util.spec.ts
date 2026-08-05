@@ -5,7 +5,7 @@ import {
   mergeRoundTripLegs,
   resolvePrimaryFlightInstanceId,
 } from './offer-flight-instances.util';
-import type { FlightOffer } from '../interfaces/flight-offers.interface';
+import type { FlightOffer } from '../../interfaces/flight-offers.interface';
 
 describe('offer-flight-instances.util', () => {
   const roundTripOffer: FlightOffer = {
