@@ -157,3 +157,10 @@ export function buildCachedPricingOffer(
     ],
   };
 }
+
+/** ISO calendar date (YYYY-MM-DD) N days after today in UTC. */
+export function isoDateDaysFromNow(days = 30): string {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
