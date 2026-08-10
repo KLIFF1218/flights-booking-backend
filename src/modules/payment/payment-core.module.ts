@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { OutboxModule } from 'src/infra/outbox/outbox.module';
 import { BookingPaymentLifecycleModule } from '../bookings/booking-payment-lifecycle.module';
 import { PaymentAbandonmentModule } from './payment-abandonment.module';
@@ -15,7 +15,7 @@ import { ReconcileLateSuccessUseCase } from './use-cases/reconcile-late-success.
     PaymentProvidersModule,
     PaymentAbandonmentModule,
     BookingPaymentLifecycleModule,
-    OutboxModule,
+    forwardRef(() => OutboxModule),
   ],
   providers: [
     PaymentHandler,
