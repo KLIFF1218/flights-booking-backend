@@ -17,6 +17,7 @@ import { AuthService } from '../services/auth.service';
 import { RegisterDto } from '../dtos/register.dto';
 import { LoginDto } from '../dtos/login.dto';
 import { AuthResponseDto } from '../dtos/auth.response.dto';
+import { RegisterAuthResponseDto } from '../dtos/register-auth.response.dto';
 import { VkIdAuthDto } from '../dtos/vk-id.auth.dto';
 import { VkPrepareDto } from '../dtos/vk-prepare.dto';
 import { CsrfResponseDto } from '../dtos/csrf.response.dto';
@@ -78,7 +79,7 @@ export class AuthController {
       'Returns accessToken in the response body and sets refreshToken in an HttpOnly cookie. Sends a verification email.',
   })
   @ApiBody({ type: RegisterDto })
-  @ApiOkResponse({ type: AuthResponseDto })
+  @ApiOkResponse({ type: RegisterAuthResponseDto })
   @ApiBadRequestError()
   @ApiConflictResponse({
     description: 'A user with this email already exists',
@@ -88,7 +89,7 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
     @Body() dto: RegisterDto,
-  ): Promise<AuthResponseDto> {
+  ): Promise<RegisterAuthResponseDto> {
     return this.authService.register(dto, req, res);
   }
 

@@ -45,7 +45,7 @@ describe('EmailVerificationService', () => {
 
     await expect(service.sendForUser('u1')).resolves.toEqual({ ok: true });
     expect(emailTokens.issue).toHaveBeenCalled();
-    expect(authEmail.sendVerification).toHaveBeenCalledWith('a@a.com', 'raw-token');
+    expect(authEmail.sendVerification).toHaveBeenCalledWith('a@a.com', 'raw-token', undefined);
   });
 
   it('confirm is idempotent when email already verified', async () => {
@@ -60,12 +60,24 @@ describe('EmailVerificationService', () => {
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
-  it('sendForUserSafe swallows errors', async () => {
+  it('sendForUserSafe swallows errors and returns false', async () => {
     prisma.user.findUnique.mockResolvedValue(null);
     const logger = (service as any).logger as { warn: jest.Mock };
 
-    await expect(service.sendForUserSafe('missing')).resolves.toBeUndefined();
+    await expect(service.sendForUserSafe('missing')).resolves.toBe(false);
     expect(logger.warn).toHaveBeenCalled();
+  });
+
+  it('sendForUserSafe returns true on success', async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'u1',
+      email: 'a@a.com',
+      emailVerifiedAt: null,
+    });
+    emailTokens.issue.mockResolvedValue('raw-token');
+
+    await expect(service.sendForUserSafe('u1', 'ru')).resolves.toBe(true);
+    expect(authEmail.sendVerification).toHaveBeenCalledWith('a@a.com', 'raw-token', 'ru');
   });
 
   it('confirm sets emailVerifiedAt', async () => {

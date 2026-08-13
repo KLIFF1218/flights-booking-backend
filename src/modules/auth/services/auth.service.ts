@@ -69,11 +69,13 @@ export class AuthService {
       },
     });
 
-    await this.emailVerification.sendForUserSafe(user.id);
+    const verificationEmailSent = await this.emailVerification.sendForUserSafe(user.id, dto.locale);
 
     runSafely(() => this.metrics.recordLogin('register'));
 
-    return this.tokenService.issueTokens(user, req, res);
+    const tokens = await this.tokenService.issueTokens(user, req, res);
+
+    return { ...tokens, verificationEmailSent };
   }
 
   async login(dto: LoginDto, req: Request, res: Response) {
