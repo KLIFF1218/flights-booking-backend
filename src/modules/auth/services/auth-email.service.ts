@@ -28,19 +28,25 @@ export class AuthEmailService {
     this.resend = apiKey ? new Resend(apiKey) : null;
   }
 
-  buildVerifyUrl(token: string): string {
-    return `${this.appUrl}/auth/verify?token=${encodeURIComponent(token)}`;
+  buildVerifyUrl(token: string, locale?: string): string {
+    const normalizedLocale = locale?.trim().toLowerCase();
+    const path =
+      normalizedLocale && normalizedLocale !== 'en'
+        ? `/${normalizedLocale}/auth/verify`
+        : '/auth/verify';
+
+    return `${this.appUrl}${path}?token=${encodeURIComponent(token)}`;
   }
 
   buildResetUrl(token: string): string {
     return `${this.appUrl}/auth/reset-password?token=${encodeURIComponent(token)}`;
   }
 
-  async sendVerification(email: string, token: string): Promise<void> {
+  async sendVerification(email: string, token: string, locale?: string): Promise<void> {
     await this.send(
       email,
       'Verify your email',
-      renderEmailVerificationEmail(this.buildVerifyUrl(token)),
+      renderEmailVerificationEmail(this.buildVerifyUrl(token, locale)),
       'email_verification',
     );
   }

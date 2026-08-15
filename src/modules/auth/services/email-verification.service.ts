@@ -22,7 +22,7 @@ export class EmailVerificationService {
     private readonly logger: Logger,
   ) {}
 
-  async sendForUser(userId: string): Promise<{ ok: true }> {
+  async sendForUser(userId: string, locale?: string): Promise<{ ok: true }> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { id: true, email: true, emailVerifiedAt: true },
@@ -40,19 +40,21 @@ export class EmailVerificationService {
       return { ok: true };
     }
 
-    await this.issueAndSend(user.id, user.email);
+    await this.issueAndSend(user.id, user.email, locale);
     return { ok: true };
   }
 
   /** Best-effort send after register / email change — never fails the primary flow. */
-  async sendForUserSafe(userId: string): Promise<void> {
+  async sendForUserSafe(userId: string, locale?: string): Promise<boolean> {
     try {
-      await this.sendForUser(userId);
+      await this.sendForUser(userId, locale);
+      return true;
     } catch (error: unknown) {
       this.logger.warn(
         { err: error instanceof Error ? error : String(error), userId },
         'Verification email skipped',
       );
+      return false;
     }
   }
 
@@ -78,7 +80,7 @@ export class EmailVerificationService {
     return { ok: true };
   }
 
-  private async issueAndSend(userId: string, email: string): Promise<void> {
+  private async issueAndSend(userId: string, email: string, locale?: string): Promise<void> {
     const token = await this.emailTokens.issue(
       userId,
       EmailTokenPurpose.EMAIL_VERIFY,
@@ -86,7 +88,7 @@ export class EmailVerificationService {
     );
 
     try {
-      await this.authEmail.sendVerification(email, token);
+      await this.authEmail.sendVerification(email, token, locale);
       runSafely(() => undefined);
     } catch {
       // Token remains valid so the user can request resend; primary API already returned.

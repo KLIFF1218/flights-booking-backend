@@ -117,7 +117,7 @@ describe('AuthService', () => {
         },
         {
           provide: EmailVerificationService,
-          useValue: { sendForUserSafe: jest.fn().mockResolvedValue(undefined) },
+          useValue: { sendForUserSafe: jest.fn().mockResolvedValue(true) },
         },
       ],
     }).compile();
@@ -145,7 +145,11 @@ describe('AuthService', () => {
         email: 'a@a.com',
         status: UserStatus.ACTIVE,
       });
-      tokenService.issueTokens.mockResolvedValue({ accessToken: 'a', accessMaxAge: 1000 });
+      tokenService.issueTokens.mockResolvedValue({
+        accessToken: 'a',
+        accessMaxAge: 1000,
+        csrfToken: 'csrf',
+      });
       const emailVerification = (service as any).emailVerification as {
         sendForUserSafe: jest.Mock;
       };
@@ -165,14 +169,19 @@ describe('AuthService', () => {
           currency: 'USD',
         }),
       });
-      expect(emailVerification.sendForUserSafe).toHaveBeenCalledWith('1');
+      expect(emailVerification.sendForUserSafe).toHaveBeenCalledWith('1', undefined);
       expect(tokenService.issueTokens).toHaveBeenCalledWith(
         { id: '1', email: 'a@a.com', status: UserStatus.ACTIVE },
         req,
         res,
       );
       expect(metrics.recordLogin).toHaveBeenCalledWith('register');
-      expect(result).toEqual({ accessToken: 'a', accessMaxAge: 1000 });
+      expect(result).toEqual({
+        accessToken: 'a',
+        accessMaxAge: 1000,
+        csrfToken: 'csrf',
+        verificationEmailSent: true,
+      });
     });
 
     it('applies locale currency and country on register', async () => {
@@ -196,6 +205,10 @@ describe('AuthService', () => {
         res,
       );
 
+      const emailVerification = (service as any).emailVerification as {
+        sendForUserSafe: jest.Mock;
+      };
+      expect(emailVerification.sendForUserSafe).toHaveBeenCalledWith('2', 'ru');
       expect(prisma.user.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           currency: 'RUB',
