@@ -256,6 +256,8 @@ export class BookingCreationService {
         airlineCode,
       );
 
+      void this.searchStore.extendOfferCachesForBooking(searchId, offerId, expiresAt);
+
       return booking;
     } catch (error) {
       const reason = resolveBookingMetricReason(error);

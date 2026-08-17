@@ -14,6 +14,7 @@ import { CalculateSeatPrice } from './services/calculate-seatprice.service';
 import { CurrencyRatesService } from './services/currency-rates.service';
 import { FlightScheduleSyncService } from './services/flight-schedule-sync.service';
 import { FlightsConfigBootstrap } from './services/flights-config.bootstrap';
+import { BookingSnapshotOfferService } from './services/booking-snapshot-offer.service';
 
 @Module({
   imports: [RedisModule],
@@ -27,6 +28,7 @@ import { FlightsConfigBootstrap } from './services/flights-config.bootstrap';
     FlightsPricingService,
     FlightsSearchStore,
     DbPricingProvider,
+    BookingSnapshotOfferService,
     FlightScheduleSyncService,
     FlightsConfigBootstrap,
     {
@@ -43,6 +45,7 @@ import { FlightsConfigBootstrap } from './services/flights-config.bootstrap';
     FLIGHT_SEARCH_PROVIDER,
     FLIGHT_PRICING_PROVIDER,
     DbPricingProvider,
+    BookingSnapshotOfferService,
     CurrencyRatesService,
     FlightScheduleSyncService,
   ],

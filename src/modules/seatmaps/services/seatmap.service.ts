@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, ConflictException } from '@nestjs/common
 import { Currency, Prisma } from '@prisma/client';
 
 import { FlightsSearchStore } from '../../flights/services/flights-cache.service';
+import { BookingSnapshotOfferService } from '../../flights/services/booking-snapshot-offer.service';
 import { SeatMapDto, SeatMapResponseDto, SingleSegmentSeatMapResponse } from '../dtos/seatmap.dto';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { MetricsService } from 'src/infra/metrics/metrics.service';
@@ -38,6 +39,7 @@ type SeatMapSegmentContext = {
 export class SeatMapsService {
   constructor(
     private readonly searchStore: FlightsSearchStore,
+    private readonly bookingSnapshotOffer: BookingSnapshotOfferService,
     private readonly prisma: PrismaService,
     private readonly metrics: MetricsService,
   ) {}
@@ -47,11 +49,17 @@ export class SeatMapsService {
   }
 
   async getSeatMap(dto: SeatMapDto): Promise<SeatMapResponseDto> {
-    const offer = await this.searchStore.getOffer(dto.searchId, dto.offerId);
+    const resolved = await this.bookingSnapshotOffer.resolveOfferContext(
+      dto.searchId,
+      dto.offerId,
+      dto.bookingId,
+    );
 
-    if (!offer) {
+    if (!resolved) {
       throw new NotFoundException('Offer not found');
     }
+
+    const offer = resolved.offer;
 
     const targetCurrency = offer.currencyCode ?? offer.price.currency;
     const segmentContexts = this.collectSegmentContexts(offer);
@@ -61,7 +69,8 @@ export class SeatMapsService {
     }
 
     // Prefer quote-locked FX so seatmap minPrice matches pricing/checkout totals.
-    const lastPricing = await this.searchStore.getLastPricing(dto.searchId, dto.offerId);
+    const lastPricing =
+      (await this.searchStore.getLastPricing(dto.searchId, dto.offerId)) ?? resolved.pricingHint;
     const fxRates = lastPricing?.fxRates;
 
     const instances = await this.loadFlightInstances(segmentContexts);

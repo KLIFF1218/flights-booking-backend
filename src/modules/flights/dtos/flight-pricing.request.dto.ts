@@ -63,6 +63,14 @@ export class FlightPricingOptionsDto {
     description: 'Fare family for repricing (LIGHT default, FLEX upsell)',
   })
   fareBrand?: FareBrand;
+
+  @IsOptional()
+  @IsString()
+  @ApiPropertyOptional({
+    example: 'clu3y9ab0002qz0q2yex8w9s0',
+    description: 'Active booking id — restores offer from snapshot when search cache expired',
+  })
+  bookingId?: string;
 }
 
 export class FlightPricingRequestDto {

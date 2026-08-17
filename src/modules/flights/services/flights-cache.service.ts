@@ -246,6 +246,35 @@ export class FlightsSearchStore {
     return this.redisService.get<unknown>(this.seatmapKey(searchId, offerId));
   }
 
+  async extendOfferCachesForBooking(
+    searchId: string,
+    offerId: string,
+    expiresAt: Date,
+  ): Promise<void> {
+    const ttlSeconds = Math.max(1, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
+    if (ttlSeconds <= 0) {
+      return;
+    }
+
+    const keys = [
+      this.searchKey(searchId),
+      this.lastPricingKey(searchId, offerId),
+      this.basePricingKey(searchId, offerId),
+      this.seatmapKey(searchId, offerId),
+    ];
+
+    await Promise.all(keys.map((key) => this.redisService.expire(key, ttlSeconds)));
+
+    const cached = await this.getSearchResults(searchId);
+    if (cached) {
+      await this.redisService.set(
+        this.searchKey(searchId),
+        { ...cached, expiresAt: expiresAt.toISOString() },
+        ttlSeconds,
+      );
+    }
+  }
+
   async deleteSeatMap(searchId: string, offerId: string): Promise<number> {
     return this.redisService.delete(this.seatmapKey(searchId, offerId));
   }

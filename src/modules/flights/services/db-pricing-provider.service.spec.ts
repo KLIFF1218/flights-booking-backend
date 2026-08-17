@@ -7,6 +7,7 @@ import { FlightsSearchStore } from './flights-cache.service';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { CalculateSeatPrice } from './calculate-seatprice.service';
 import { CurrencyRatesService } from './currency-rates.service';
+import { BookingSnapshotOfferService } from './booking-snapshot-offer.service';
 import { buildCachedPricingOffer, buildMockFlightInstance } from '../flights-test.fixtures';
 
 describe('DbPricingProvider', () => {
@@ -28,6 +29,9 @@ describe('DbPricingProvider', () => {
   const prisma = {
     flightInstance: { findMany: jest.fn() },
   };
+  const bookingSnapshotOffer = {
+    resolveOfferContext: jest.fn(),
+  };
 
   const instance = buildMockFlightInstance({
     id: 'fi-jfk-sfo',
@@ -46,6 +50,7 @@ describe('DbPricingProvider', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: CalculateSeatPrice, useValue: calculateSeatPrice },
         { provide: CurrencyRatesService, useValue: currencyRatesService },
+        { provide: BookingSnapshotOfferService, useValue: bookingSnapshotOffer },
         { provide: Logger, useValue: { debug: jest.fn() } },
       ],
     }).compile();
@@ -63,20 +68,22 @@ describe('DbPricingProvider', () => {
   });
 
   it('throws when cached offer is missing', async () => {
-    searchStore.getOfferWithContext.mockResolvedValue(null);
+    bookingSnapshotOffer.resolveOfferContext.mockResolvedValue(null);
 
     await expect(service.price('search-1', 'offer-1')).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('prices offer from cached search context', async () => {
     const offer = buildCachedPricingOffer('fi-jfk-sfo');
-    searchStore.getOfferWithContext.mockResolvedValue({
+    bookingSnapshotOffer.resolveOfferContext.mockResolvedValue({
       offer,
-      context: {
+      searchContext: {
         passengers: { adults: 1, children: 0, infants: 0, seatedInfants: 0 },
         travelClass: TravelClass.ECONOMY,
         currencyCode: Currency.USD,
       },
+      offerCurrency: Currency.USD,
+      pricingHint: null,
     });
 
     const result = await service.price('search-1', 'fi-jfk-sfo');
@@ -99,12 +106,14 @@ describe('DbPricingProvider', () => {
 
   it('includes seat surcharge and bookingId when seats are selected', async () => {
     const offer = buildCachedPricingOffer('fi-jfk-sfo');
-    searchStore.getOfferWithContext.mockResolvedValue({
+    bookingSnapshotOffer.resolveOfferContext.mockResolvedValue({
       offer,
-      context: {
+      searchContext: {
         passengers: { adults: 1, children: 0, infants: 0, seatedInfants: 0 },
         travelClass: TravelClass.ECONOMY,
       },
+      offerCurrency: Currency.USD,
+      pricingHint: null,
     });
     calculateSeatPrice.calculateSeatPrice.mockResolvedValue(40);
 
@@ -126,13 +135,15 @@ describe('DbPricingProvider', () => {
 
   it('converts offer to requested currency when currencyCode differs from cached offer', async () => {
     const offer = buildCachedPricingOffer('fi-jfk-sfo');
-    searchStore.getOfferWithContext.mockResolvedValue({
+    bookingSnapshotOffer.resolveOfferContext.mockResolvedValue({
       offer,
-      context: {
+      searchContext: {
         passengers: { adults: 1, children: 0, infants: 0, seatedInfants: 0 },
         travelClass: TravelClass.ECONOMY,
         currencyCode: Currency.USD,
       },
+      offerCurrency: Currency.USD,
+      pricingHint: null,
     });
 
     const result = await service.price('search-1', 'fi-jfk-sfo', { currencyCode: Currency.RUB });

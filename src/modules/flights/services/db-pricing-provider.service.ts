@@ -37,6 +37,7 @@ import {
   resolveFareBrandRules,
 } from '../constants/fare-brand.constants';
 import type { FlightOffer } from '../interfaces/flight-offers.interface';
+import { BookingSnapshotOfferService } from './booking-snapshot-offer.service';
 
 type PricingOptions = {
   seats?: SeatOptionDto[];
@@ -73,6 +74,7 @@ export class DbPricingProvider implements FlightPricingProvider {
     private readonly prisma: PrismaService,
     private readonly calculateSeatPrice: CalculateSeatPrice,
     private readonly currencyRatesService: CurrencyRatesService,
+    private readonly bookingSnapshotOffer: BookingSnapshotOfferService,
     private readonly logger: Logger,
   ) {}
 
@@ -81,7 +83,7 @@ export class DbPricingProvider implements FlightPricingProvider {
     offerId: string,
     options?: PricingOptions,
   ): Promise<FlightPricingResponse> {
-    const loaded = await this.loadOfferFromCache(searchId, offerId);
+    const loaded = await this.loadOfferFromCache(searchId, offerId, options?.bookingId);
     const fxRates =
       options?.lockedFxRates ?? (await this.currencyRatesService.syncRatesFromRedis());
     const fxRatesAt = new Date().toISOString();
@@ -138,18 +140,28 @@ export class DbPricingProvider implements FlightPricingProvider {
     });
   }
 
-  private async loadOfferFromCache(searchId: string, offerId: string) {
-    const cachedOffer = await this.searchStore.getOfferWithContext(searchId, offerId);
-    if (!cachedOffer) {
+  private async loadOfferFromCache(searchId: string, offerId: string, bookingId?: string) {
+    const resolved = await this.bookingSnapshotOffer.resolveOfferContext(
+      searchId,
+      offerId,
+      bookingId,
+    );
+
+    if (!resolved) {
       throw new NotFoundException('Offer not found');
     }
 
-    const offerCurrency = cachedOffer.offer.currencyCode ?? cachedOffer.offer.price.currency;
+    if (resolved.pricingHint) {
+      const existingLastPricing = await this.searchStore.getLastPricing(searchId, offerId);
+      if (!existingLastPricing) {
+        await this.searchStore.saveLastPricing(searchId, offerId, resolved.pricingHint);
+      }
+    }
 
     return {
-      offer: cachedOffer.offer,
-      searchContext: cachedOffer.context,
-      offerCurrency,
+      offer: resolved.offer,
+      searchContext: resolved.searchContext,
+      offerCurrency: resolved.offerCurrency,
     };
   }
 
