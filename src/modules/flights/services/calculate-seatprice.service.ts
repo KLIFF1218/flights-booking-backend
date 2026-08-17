@@ -1,5 +1,5 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
-import { Currency, SeatType, TravelClass } from '@prisma/client';
+import { Currency, SeatType } from '@prisma/client';
 import { SeatOption } from '../interfaces/seat-options';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { FlightOffer } from '../interfaces/flight-offers.interface';

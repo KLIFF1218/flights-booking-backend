@@ -1,7 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import type { FlightOffer } from '../interfaces/flight-offers.interface';
 import type { FlightInstanceWithRelations } from '../providers/prisma/flight-instance.type';
-import type { SortType, FlightSearchCursorPayload } from 'src/shared/flights/search-cursor.types';
 
 export type { SortType, FlightSearchCursorPayload } from 'src/shared/flights/search-cursor.types';
 

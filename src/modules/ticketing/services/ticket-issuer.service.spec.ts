@@ -1,4 +1,4 @@
-import { EnumTransport, TravelClass } from '@prisma/client';
+import { TravelClass } from '@prisma/client';
 import { TicketIssuerService } from './ticket-issuer.service';
 import { type TicketDocumentService } from './ticket-document.service';
 import { type TicketPersistenceService } from './ticket-persistence.service';

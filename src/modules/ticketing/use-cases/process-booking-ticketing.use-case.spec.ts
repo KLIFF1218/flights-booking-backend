@@ -5,7 +5,7 @@ import { type TicketIssuerService } from '../services/ticket-issuer.service';
 import { type MailService } from 'src/infra/mail/mail.service';
 import { type BookingsCacheService } from 'src/modules/bookings/services/bookings-cache.service';
 import { type Logger } from 'nestjs-pino';
-import { TicketingUnrecoverableError, TicketingErrorCode } from '../errors/ticketing.errors';
+import { TicketingErrorCode } from '../errors/ticketing.errors';
 
 describe('ProcessBookingTicketingUseCase', () => {
   let useCase: ProcessBookingTicketingUseCase;

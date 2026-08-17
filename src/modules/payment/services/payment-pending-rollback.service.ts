@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { BookingStatus, PaymentProvider, TransactionStatus } from '@prisma/client';
+import { BookingStatus, PaymentProvider } from '@prisma/client';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { PaymentAbandonmentService } from './payment-abandonment.service';
 import { isAbandonableTransactionStatus } from '../domain/payment-transaction.policy';
