@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
-import { Currency, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 import { FlightsSearchStore } from '../../flights/services/flights-cache.service';
 import { BookingSnapshotOfferService } from '../../flights/services/booking-snapshot-offer.service';

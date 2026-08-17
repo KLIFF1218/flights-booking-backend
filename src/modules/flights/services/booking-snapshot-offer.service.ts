@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Currency } from '@prisma/client';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { FlightsSearchStore, type CachedSearchContext } from './flights-cache.service';
 import type { FlightOffer } from '../interfaces/flight-offers.interface';
@@ -8,7 +9,7 @@ import type { BookingSnapshot } from 'src/modules/bookings/interfaces/booking-sn
 export type ResolvedOfferContext = {
   offer: FlightOffer;
   searchContext: CachedSearchContext | null;
-  offerCurrency: string;
+  offerCurrency: Currency;
   pricingHint: FlightPricingResponse | null;
 };
 
