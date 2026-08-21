@@ -13,20 +13,23 @@ import {
   ApiCookieAuth,
   ApiParam,
 } from '@nestjs/swagger';
-import { AuthService } from '../services/auth.service';
-import { RegisterDto } from '../dtos/register.dto';
-import { LoginDto } from '../dtos/login.dto';
-import { AuthResponseDto } from '../dtos/auth.response.dto';
-import { RegisterAuthResponseDto } from '../dtos/register-auth.response.dto';
-import { VkIdAuthDto } from '../dtos/vk-id.auth.dto';
-import { VkPrepareDto } from '../dtos/vk-prepare.dto';
-import { CsrfResponseDto } from '../dtos/csrf.response.dto';
-import { ConfirmEmailDto } from '../dtos/confirm-email.dto';
-import { ForgotPasswordDto } from '../dtos/forgot-password.dto';
-import { ResetPasswordDto } from '../dtos/reset-password.dto';
-import { ChangePasswordDto } from '../dtos/change-password.dto';
-import { OkResponseDto } from '../dtos/ok.response.dto';
-import { RevokeSessionResponseDto, SessionsListResponseDto } from '../dtos/session.response.dto';
+import { AuthService } from '../services/auth/auth.service';
+import { RegisterDto } from '../dtos/auth/register.dto';
+import { LoginDto } from '../dtos/auth/login.dto';
+import { AuthResponseDto } from '../dtos/auth/auth.response.dto';
+import { RegisterAuthResponseDto } from '../dtos/auth/register-auth.response.dto';
+import { VkIdAuthDto } from '../dtos/social/vk-id.auth.dto';
+import { VkPrepareDto } from '../dtos/social/vk-prepare.dto';
+import { CsrfResponseDto } from '../dtos/session/csrf.response.dto';
+import { ConfirmEmailDto } from '../dtos/email/confirm-email.dto';
+import { ForgotPasswordDto } from '../dtos/password/forgot-password.dto';
+import { ResetPasswordDto } from '../dtos/password/reset-password.dto';
+import { ChangePasswordDto } from '../dtos/password/change-password.dto';
+import { OkResponseDto } from '../dtos/common/ok.response.dto';
+import {
+  RevokeSessionResponseDto,
+  SessionsListResponseDto,
+} from '../dtos/session/session.response.dto';
 import type { Request, Response } from 'express';
 import {
   Authorized,
@@ -43,10 +46,10 @@ import {
   SuccessResponseDto,
 } from 'src/common/swagger/api-responses.decorator';
 import { ErrorResponseDto } from 'src/common/dto/error-response.dto';
-import { SocialService } from '../services/social.service';
-import { EmailVerificationService } from '../services/email-verification.service';
-import { PasswordLifecycleService } from '../services/password-lifecycle.service';
-import { SessionsService } from '../services/sessions.service';
+import { SocialService } from '../services/social/social.service';
+import { EmailVerificationService } from '../services/email/email-verification.service';
+import { PasswordLifecycleService } from '../services/password/password-lifecycle.service';
+import { SessionsService } from '../services/session/sessions.service';
 
 @ApiTags('Auth')
 @Controller({ path: 'auth', version: '1' })

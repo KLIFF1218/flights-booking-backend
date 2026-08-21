@@ -8,7 +8,7 @@ import { API_V1, createE2eApp } from '../../../test/e2e-app.util';
 import { CSRF_COOKIE_NAME, CSRF_HEADER_NAME } from 'src/common/constants/csrf.constants';
 import { getJwtAccessSecret, getJwtRefreshSecret } from 'src/config/jwt-secrets';
 import { ConfigService } from '@nestjs/config';
-import { EmailTokenService } from 'src/modules/auth/services/email-token.service';
+import { EmailTokenService } from 'src/modules/auth/services/email/email-token.service';
 
 jest.setTimeout(120_000);
 
