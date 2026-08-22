@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Logger } from 'nestjs-pino';
-import { BookingsService } from '../services/bookings.service';
+import { BookingsService } from '../services/booking/bookings.service';
 
 export type CreateCompensationOutboxPayload = {
   bookingId: string;
