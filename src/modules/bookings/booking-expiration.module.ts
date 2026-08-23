@@ -1,5 +1,5 @@
 import { Module, forwardRef } from '@nestjs/common';
-import { BookingExpirationService } from './services/booking-expiration.service';
+import { BookingExpirationService } from './services/lifecycle/booking-expiration.service';
 import { SeatReleaseModule } from './seat-release.module';
 import { BookingsCacheModule } from './bookings-cache.module';
 import { BookingMetricsModule } from './metrics/booking-metrics.module';
