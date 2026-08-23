@@ -9,7 +9,7 @@ import {
   type ExistingSeatAssignment,
 } from './booking-seat-selection.util';
 import type { BookingSnapshot } from '../interfaces/booking-snapshot.interface';
-import type { AssignSeatDto } from '../dtos/add-seats.dto';
+import type { AssignSeatDto } from '../dtos/booking/add-seats.dto';
 
 describe('seatAssignmentsMatchRequest', () => {
   const assignments: ExistingSeatAssignment[] = [
