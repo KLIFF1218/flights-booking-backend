@@ -4,10 +4,10 @@ import type { SearchFlightsDto } from '../dtos';
 import type { FlightOffer } from '../interfaces/flight-offers.interface';
 import type { PreprocessedFlightOffer } from '../types/flights.types';
 import type { FlightSearchProvider } from '../providers/flight-search.provider';
-import type { FlightsSearchStore } from './flights-cache.service';
-import type { FlightOfferMapper } from './flight-offer.mapper';
+import type { FlightsSearchStore } from './cache/flights-cache.service';
+import type { FlightOfferMapper } from './mappers/flight-offer.mapper';
 import type { MetricsService } from 'src/infra/metrics/metrics.service';
-import type { FlightScheduleSyncService } from './flight-schedule-sync.service';
+import type { FlightScheduleSyncService } from './schedule/flight-schedule-sync.service';
 import { preprocessOffers } from '../utils/search/preprocess-offers.util';
 import { isoDateDaysFromNow } from '../flights-test.fixtures';
 
