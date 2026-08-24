@@ -2,7 +2,7 @@ import { BookingStatus, PaymentProvider, TransactionStatus } from '@prisma/clien
 import { PaymentAbandonmentService } from './payment-abandonment.service';
 import { type PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { type PaymentProviderService } from './payment-provider.service';
-import { type BookingPaymentLifecycleService } from '../../bookings/services/booking-payment-lifecycle.service';
+import { type BookingPaymentLifecycleService } from '../../bookings/services/checkout/booking-payment-lifecycle.service';
 import { type Logger } from 'nestjs-pino';
 import { createBookingMetricsMock } from '../../bookings/metrics/booking-metrics.mock';
 
