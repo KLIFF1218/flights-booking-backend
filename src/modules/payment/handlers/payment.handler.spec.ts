@@ -13,7 +13,7 @@ import { AuthorizePaymentUseCase } from '../use-cases/authorize-payment.use-case
 import { ConfirmPaymentUseCase } from '../use-cases/confirm-payment.use-case';
 import { FailPaymentUseCase } from '../use-cases/fail-payment.use-case';
 import { ReconcileLateSuccessUseCase } from '../use-cases/reconcile-late-success.use-case';
-import { BookingPaymentLifecycleService } from '../../bookings/services/booking-payment-lifecycle.service';
+import { BookingPaymentLifecycleService } from '../../bookings/services/checkout/booking-payment-lifecycle.service';
 import { BOOKING_PAYMENT_SEAT_RELEASE_REASON } from '../../bookings/constants/booking-seat-lifecycle.constants';
 
 describe('PaymentHandler', () => {
