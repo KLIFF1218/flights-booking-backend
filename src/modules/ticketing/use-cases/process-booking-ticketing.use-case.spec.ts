@@ -3,7 +3,7 @@ import { ProcessBookingTicketingUseCase } from './process-booking-ticketing.use-
 import { type PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { type TicketIssuerService } from '../services/ticket-issuer.service';
 import { type MailService } from 'src/infra/mail/mail.service';
-import { type BookingsCacheService } from 'src/modules/bookings/services/bookings-cache.service';
+import { type BookingsCacheService } from 'src/modules/bookings/services/lifecycle/bookings-cache.service';
 import { type Logger } from 'nestjs-pino';
 import { TicketingErrorCode } from '../errors/ticketing.errors';
 
