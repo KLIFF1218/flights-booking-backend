@@ -7,7 +7,7 @@ import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { UsersService } from 'src/modules/users/services/users.service';
 import { TokenService } from './token.service';
 import { MetricsService } from 'src/infra/metrics/metrics.service';
-import { CsrfService } from './csrf.service';
+import { CsrfService } from '../session/csrf.service';
 
 describe('RefreshService', () => {
   let service: RefreshService;

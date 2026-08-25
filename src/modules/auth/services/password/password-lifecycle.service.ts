@@ -3,13 +3,13 @@ import { ConfigService } from '@nestjs/config';
 import { EmailTokenPurpose, RevokedReason } from '@prisma/client';
 import type { Response } from 'express';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
-import { EmailTokenService } from './email-token.service';
-import { AuthEmailService } from './auth-email.service';
+import { EmailTokenService } from '../email/email-token.service';
+import { AuthEmailService } from '../email/auth-email.service';
 import { PasswordService } from './password.service';
 import { Logger } from 'nestjs-pino';
 import { MetricsService } from 'src/infra/metrics/metrics.service';
 import { runSafely } from 'src/common/utils/safe-metrics.util';
-import { clearRefreshCookie } from '../utils/clear-refresh-cookie';
+import { clearRefreshCookie } from '../../utils/clear-refresh-cookie';
 
 const RESET_TTL_MS = 1000 * 60 * 60; // 1h
 

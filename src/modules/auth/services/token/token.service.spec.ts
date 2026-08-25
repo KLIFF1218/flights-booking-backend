@@ -6,7 +6,7 @@ import { hash, verify } from 'argon2';
 import { TokenService } from './token.service';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { MetricsService } from 'src/infra/metrics/metrics.service';
-import { CsrfService } from './csrf.service';
+import { CsrfService } from '../session/csrf.service';
 
 jest.mock('argon2', () => ({
   hash: jest.fn(),

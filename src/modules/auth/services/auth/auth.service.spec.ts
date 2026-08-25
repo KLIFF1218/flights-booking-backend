@@ -8,12 +8,12 @@ import { ConfigService } from '@nestjs/config';
 import { Logger } from 'nestjs-pino';
 import { UsersService } from 'src/modules/users/services/users.service';
 import { MetricsService } from 'src/infra/metrics/metrics.service';
-import { TokenService } from './token.service';
-import { RefreshService } from './refresh.service';
-import { SocialService } from './social.service';
-import { CsrfService } from './csrf.service';
-import { PasswordService } from './password.service';
-import { EmailVerificationService } from './email-verification.service';
+import { TokenService } from '../token/token.service';
+import { RefreshService } from '../token/refresh.service';
+import { SocialService } from '../social/social.service';
+import { CsrfService } from '../session/csrf.service';
+import { PasswordService } from '../password/password.service';
+import { EmailVerificationService } from '../email/email-verification.service';
 
 jest.mock('argon2', () => ({
   hash: jest.fn(),

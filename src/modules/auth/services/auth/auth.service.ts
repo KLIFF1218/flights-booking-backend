@@ -1,20 +1,20 @@
 import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
-import { RegisterDto } from '../dtos/register.dto';
-import { LoginDto } from '../dtos/login.dto';
+import { RegisterDto } from '../../dtos/auth/register.dto';
+import { LoginDto } from '../../dtos/auth/login.dto';
 import { ConfigService } from '@nestjs/config';
 import { Request, Response } from 'express';
 import { Currency, UserStatus } from '@prisma/client';
 import { Logger } from 'nestjs-pino';
 import { UsersService } from 'src/modules/users/services/users.service';
-import { MetricsService } from '../../../infra/metrics/metrics.service';
-import { TokenService } from './token.service';
-import { RefreshService } from './refresh.service';
-import { SocialService } from './social.service';
-import { CsrfService } from './csrf.service';
-import { PasswordService } from './password.service';
-import { EmailVerificationService } from './email-verification.service';
-import { VkIdAuthDto } from '../dtos/vk-id.auth.dto';
+import { MetricsService } from 'src/infra/metrics/metrics.service';
+import { TokenService } from '../token/token.service';
+import { RefreshService } from '../token/refresh.service';
+import { SocialService } from '../social/social.service';
+import { CsrfService } from '../session/csrf.service';
+import { PasswordService } from '../password/password.service';
+import { EmailVerificationService } from '../email/email-verification.service';
+import { VkIdAuthDto } from '../../dtos/social/vk-id.auth.dto';
 import { runSafely } from 'src/common/utils/safe-metrics.util';
 import {
   resolveCountryFromLocale,

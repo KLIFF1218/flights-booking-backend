@@ -6,8 +6,8 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { MetricsService } from 'src/infra/metrics/metrics.service';
 import { runSafely } from 'src/common/utils/safe-metrics.util';
-import type { SessionResponseDto } from '../dtos/session.response.dto';
-import { clearRefreshCookie } from '../utils/clear-refresh-cookie';
+import type { SessionResponseDto } from '../../dtos/session/session.response.dto';
+import { clearRefreshCookie } from '../../utils/clear-refresh-cookie';
 
 @Injectable()
 export class SessionsService {

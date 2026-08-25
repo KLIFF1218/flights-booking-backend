@@ -8,7 +8,7 @@ import { JwtPayload } from 'src/modules/auth/interfaces';
 import { MetricsService } from 'src/infra/metrics/metrics.service';
 import { runSafely } from 'src/common/utils/safe-metrics.util';
 import { RevokedReason } from '@prisma/client';
-import { CsrfService } from './csrf.service';
+import { CsrfService } from '../session/csrf.service';
 
 /** Concurrent multi-tab refresh window — do not treat as replay attack. */
 const CONCURRENT_ROTATION_GRACE_MS = 5_000;

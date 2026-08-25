@@ -5,7 +5,7 @@ import { Provider } from '@prisma/client';
 import axios from 'axios';
 import { SocialService } from './social.service';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
-import { TokenService } from './token.service';
+import { TokenService } from '../token/token.service';
 import { MetricsService } from 'src/infra/metrics/metrics.service';
 import { RedisService } from 'src/infra/redis/redis.service';
 import { Logger } from 'nestjs-pino';

@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
-import { IsStrongPassword, PASSWORD_POLICY_MESSAGE } from './password-policy';
+import { IsStrongPassword, PASSWORD_POLICY_MESSAGE } from '../password/password-policy';
 
 export class RegisterDto {
   @ApiProperty({

@@ -12,8 +12,8 @@ import { JwtPayload } from 'src/modules/auth/interfaces';
 import { runSafely } from 'src/common/utils/safe-metrics.util';
 import { parseDurationMs } from 'src/common/utils/parse-duration.util';
 import { getJwtAccessSecret, getJwtRefreshSecret } from 'src/config/jwt-secrets';
-import { CsrfService } from './csrf.service';
-import { clearRefreshCookie } from '../utils/clear-refresh-cookie';
+import { CsrfService } from '../session/csrf.service';
+import { clearRefreshCookie } from '../../utils/clear-refresh-cookie';
 
 type TokenUser = Pick<User, 'id' | 'status'>;
 
