@@ -2,15 +2,15 @@ import { type INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { BookingStatus, EnumTransport, TransactionStatus } from '@prisma/client';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
-import { API_V1, createBookingsE2eApp } from '../../../test/bookings-e2e-app.util';
+import { API_V1, createBookingsE2eApp } from './bookings-e2e-app.util';
 import {
   buildAdultTraveler,
   E2E_PAYMENT_REDIRECT_URL,
   findSearchOffer,
   pickAvailableSeat,
   registerVerifiedUser,
-} from '../../../test/bookings-e2e.helpers';
-import { seedDemoDataset } from '../../../scripts/seeds/demo.seed';
+} from './bookings-e2e.helpers';
+import { seedDemoDataset } from '../scripts/seeds/demo.seed';
 
 jest.setTimeout(180_000);
 
