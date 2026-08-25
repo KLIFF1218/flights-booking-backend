@@ -2,8 +2,8 @@ import { type INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { API_V1, createSeatmapsE2eApp } from '../../../test/seatmaps-e2e-app.util';
-import { findSearchOffer, registerVerifiedUser } from '../../../test/bookings-e2e.helpers';
-import { seedDemoDataset } from '../../../scripts/seeds/demo.seed';
+import { findSearchOffer, registerVerifiedUser } from './bookings-e2e.helpers';
+import { seedDemoDataset } from '../scripts/seeds/demo.seed';
 
 jest.setTimeout(180_000);
 

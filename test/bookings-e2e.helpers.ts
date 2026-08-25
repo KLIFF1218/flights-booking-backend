@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { type INestApplication } from '@nestjs/common';
 import request from 'supertest';
-import { Gender } from 'src/modules/bookings/dtos/traveler.input.dto';
+import { Gender } from 'src/modules/bookings/dtos/shared/traveler.input.dto';
 import { E2E_PAYMENT_REDIRECT_URL } from './e2e-payment.stubs';
 
 type SearchOffer = {

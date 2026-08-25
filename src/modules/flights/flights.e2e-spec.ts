@@ -1,7 +1,7 @@
 import { type INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { API_V1, createFlightsE2eApp } from '../../../test/flights-e2e-app.util';
-import { seedDemoDataset } from '../../../scripts/seeds/demo.seed';
+import { seedDemoDataset } from '../scripts/seeds/demo.seed';
 
 jest.setTimeout(180_000);
 

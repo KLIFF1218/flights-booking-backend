@@ -1,9 +1,9 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { FlightBookingController } from './flight-booking.controller';
-import { BookingWorkflowService } from '../services/booking-workflow.service';
-import { BookingsService } from '../services/bookings.service';
-import { BookingPaymentService } from '../services/booking-payment.service';
+import { BookingWorkflowService } from '../services/booking/booking-workflow.service';
+import { BookingsService } from '../services/booking/bookings.service';
+import { BookingPaymentService } from '../services/checkout/booking-payment.service';
 
 describe('FlightBookingController', () => {
   let controller: FlightBookingController;

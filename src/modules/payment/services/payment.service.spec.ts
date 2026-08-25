@@ -6,7 +6,7 @@ import { MetricsService } from 'src/infra/metrics/metrics.service';
 import { BookingStatus, Currency, PaymentProvider, TransactionStatus } from '@prisma/client';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Logger } from 'nestjs-pino';
-import { BookingExpirationService } from '../../bookings/services/booking-expiration.service';
+import { BookingExpirationService } from '../../bookings/services/lifecycle/booking-expiration.service';
 import { PaymentAbandonmentService } from './payment-abandonment.service';
 import { PaymentPendingRollbackService } from './payment-pending-rollback.service';
 

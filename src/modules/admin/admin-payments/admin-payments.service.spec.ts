@@ -4,12 +4,12 @@ import { PaymentStatusEnum } from 'nestjs-yookassa';
 import { AdminPaymentsService } from './admin-payments.service';
 import { type PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { type YookassaProvider } from 'src/modules/payment/providers/yoomoney/yoomoney.service';
-import { type BookingsCacheService } from 'src/modules/bookings/services/bookings-cache.service';
+import { type BookingsCacheService } from 'src/modules/bookings/services/lifecycle/bookings-cache.service';
 import { type OutboxService } from 'src/infra/outbox/outbox.service';
-import { type SeatReleaseService } from 'src/modules/bookings/services/seat-release.service';
+import { type SeatReleaseService } from 'src/modules/bookings/services/seats/seat-release.service';
 import { type MetricsService } from 'src/infra/metrics/metrics.service';
 
-jest.mock('src/modules/bookings/utils/booking-inventory.util', () => ({
+jest.mock('src/modules/bookings/utils/inventory/booking-inventory.util', () => ({
   releaseFlightInstanceInventoryForBooking: jest.fn().mockResolvedValue(undefined),
 }));
 

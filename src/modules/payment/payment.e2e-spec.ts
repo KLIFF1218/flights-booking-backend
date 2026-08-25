@@ -3,7 +3,7 @@ import request from 'supertest';
 import { BookingStatus, TransactionStatus } from '@prisma/client';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { API_V1, createPaymentE2eApp } from '../../../test/payment-e2e-app.util';
-import { registerVerifiedUser } from '../../../test/bookings-e2e.helpers';
+import { registerVerifiedUser } from './bookings-e2e.helpers';
 import { createPaymentPendingFixture } from '../../../test/payment-e2e.helpers';
 
 jest.setTimeout(180_000);

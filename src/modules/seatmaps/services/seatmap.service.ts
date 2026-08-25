@@ -1,8 +1,8 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
-import { FlightsSearchStore } from '../../flights/services/flights-cache.service';
-import { BookingSnapshotOfferService } from '../../flights/services/booking-snapshot-offer.service';
+import { FlightsSearchStore } from '../../flights/services/cache/flights-cache.service';
+import { BookingSnapshotOfferService } from '../../flights/services/cache/booking-snapshot-offer.service';
 import { SeatMapDto, SeatMapResponseDto, SingleSegmentSeatMapResponse } from '../dtos/seatmap.dto';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { MetricsService } from 'src/infra/metrics/metrics.service';

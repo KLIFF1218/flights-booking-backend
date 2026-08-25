@@ -13,7 +13,7 @@ import { addMinutes } from 'date-fns';
 import { PaymentProviderService } from './payment-provider.service';
 import { MetricsService } from 'src/infra/metrics/metrics.service';
 import { Logger } from 'nestjs-pino';
-import { BookingExpirationService } from '../../bookings/services/booking-expiration.service';
+import { BookingExpirationService } from '../../bookings/services/lifecycle/booking-expiration.service';
 import { PAYMENT_GRACE_MINUTES } from '../../bookings/constants/booking-expiration.constants';
 import { runSafely } from 'src/common/utils/safe-metrics.util';
 import { normalizePaymentFailureReason } from 'src/infra/metrics/normalize-metric-reason.util';

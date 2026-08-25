@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Logger } from 'nestjs-pino';
-import { SeatReleaseService } from '../../bookings/services/seat-release.service';
-import { BookingExpirationService } from '../../bookings/services/booking-expiration.service';
+import { SeatReleaseService } from '../../bookings/services/seats/seat-release.service';
+import { BookingExpirationService } from '../../bookings/services/lifecycle/booking-expiration.service';
 import { PaymentAbandonmentService } from '../../payment/services/payment-abandonment.service';
 import { PaymentOrphanReconciliationService } from '../../payment/services/payment-orphan-reconciliation.service';
 import { SchedulerLockService } from './scheduler-lock.service';

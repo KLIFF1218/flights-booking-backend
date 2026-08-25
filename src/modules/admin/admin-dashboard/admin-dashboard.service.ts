@@ -3,7 +3,7 @@ import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { DashboardStatsDto } from './dtos/admin-dashboard-stats.dto';
 import { BookingStatus, TransactionStatus } from '@prisma/client';
 import type { BookingSnapshot } from 'src/modules/bookings/interfaces/booking-snapshot.interface';
-import { extractRouteFromSnapshot } from 'src/modules/bookings/utils/booking-snapshot.util';
+import { extractRouteFromSnapshot } from 'src/modules/bookings/utils/snapshot/booking-snapshot.util';
 import { DomainAnalyticsService } from 'src/infra/analytics/domain-analytics.service';
 
 @Injectable()
