@@ -1,7 +1,7 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import { Logger } from 'nestjs-pino';
 import { CreateCompensationOutboxHandler } from './create-compensation.outbox-handler';
-import { BookingsService } from '../services/bookings.service';
+import { BookingsService } from '../services/booking/bookings.service';
 
 describe('CreateCompensationOutboxHandler', () => {
   let handler: CreateCompensationOutboxHandler;

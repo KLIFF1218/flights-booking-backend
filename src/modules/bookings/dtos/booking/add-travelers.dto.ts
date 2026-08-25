@@ -1,0 +1,12 @@
+import { Type } from 'class-transformer';
+import { ValidateNested, ArrayMinSize } from 'class-validator';
+import { TravelerInputDto } from '../shared/traveler.input.dto';
+import { ApiProperty } from '@nestjs/swagger';
+
+export class AddTravelersDto {
+  @ValidateNested({ each: true })
+  @Type(() => TravelerInputDto)
+  @ArrayMinSize(1)
+  @ApiProperty({ type: [TravelerInputDto] })
+  travelers: TravelerInputDto[] = [];
+}

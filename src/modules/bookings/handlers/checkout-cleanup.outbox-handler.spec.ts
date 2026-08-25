@@ -1,8 +1,8 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import { Logger } from 'nestjs-pino';
 import { CheckoutCleanupOutboxHandler } from './checkout-cleanup.outbox-handler';
-import { FlightsSearchStore } from 'src/modules/flights/services/flights-cache.service';
-import { BookingsCacheService } from '../services/bookings-cache.service';
+import { FlightsSearchStore } from 'src/modules/flights/services/cache/flights-cache.service';
+import { BookingsCacheService } from '../services/lifecycle/bookings-cache.service';
 
 describe('CheckoutCleanupOutboxHandler', () => {
   let handler: CheckoutCleanupOutboxHandler;
