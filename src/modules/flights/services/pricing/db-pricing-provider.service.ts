@@ -1,8 +1,8 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { FlightsSearchStore, type CachedSearchContext } from './flights-cache.service';
+import { FlightsSearchStore, type CachedSearchContext } from '../cache/flights-cache.service';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
-import { FlightPricingResponse, SeatOptionDto } from '../dtos';
-import { mapItinerary } from '../utils/offer/itinerary.mapper';
+import { FlightPricingResponse, SeatOptionDto } from '../../dtos';
+import { mapItinerary } from '../../utils/offer/itinerary.mapper';
 import { CalculateSeatPrice } from './calculate-seatprice.service';
 import { Currency, FareBrand, PassengerType } from '@prisma/client';
 import {
@@ -11,33 +11,33 @@ import {
   normalizePassengerCounts,
   validatePassengerCounts,
 } from 'src/shared/booking/passenger-counts.util';
-import { FlightInstanceWithFares } from '../types/flights.types';
+import { FlightInstanceWithFares } from '../../types/flights.types';
 import { Logger } from 'nestjs-pino';
-import { convertCurrencyWithRates } from '../utils/pricing/currency.util';
-import { buildFarePriceBreakdown, formatOfferPrice } from '../utils/pricing/fare-charges.util';
-import { buildTravelerPriceFromBase } from '../utils/pricing/traveler-pricing.util';
+import { convertCurrencyWithRates } from '../../utils/pricing/currency.util';
+import { buildFarePriceBreakdown, formatOfferPrice } from '../../utils/pricing/fare-charges.util';
+import { buildTravelerPriceFromBase } from '../../utils/pricing/traveler-pricing.util';
 import {
   createPricingQuoteMeta,
   PRICING_QUOTE_TTL_SECONDS,
   PRICING_QUOTE_WITH_SEATS_TTL_SECONDS,
 } from 'src/shared/pricing/pricing-quote.util';
 import { CurrencyRatesService } from './currency-rates.service';
-import { flightInstanceInclude } from '../providers/prisma/flight-instance.include';
-import type { FlightInstanceWithRelations } from '../providers/prisma/flight-instance.type';
+import { flightInstanceInclude } from '../../providers/prisma/flight-instance.include';
+import type { FlightInstanceWithRelations } from '../../providers/prisma/flight-instance.type';
 import {
   applyInstanceSchedulesToOffer,
   assertFlightInstancesBookable,
-} from '../utils/offer/offer-schedule.util';
-import type { FlightPricingProvider } from '../providers/flight-pricing.provider';
+} from '../../utils/offer/offer-schedule.util';
+import type { FlightPricingProvider } from '../../providers/flight-pricing.provider';
 import {
   DEFAULT_SEARCH_FARE_BRAND,
   isFareBrand,
   OFFER_SOURCE_INTERNAL_DB,
   PRICING_MODE_INDICATIVE,
   resolveFareBrandRules,
-} from '../constants/fare-brand.constants';
-import type { FlightOffer } from '../interfaces/flight-offers.interface';
-import { BookingSnapshotOfferService } from './booking-snapshot-offer.service';
+} from '../../constants/fare-brand.constants';
+import type { FlightOffer } from '../../interfaces/flight-offers.interface';
+import { BookingSnapshotOfferService } from '../cache/booking-snapshot-offer.service';
 
 type PricingOptions = {
   seats?: SeatOptionDto[];

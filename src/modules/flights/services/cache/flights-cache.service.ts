@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { RedisService } from 'src/infra/redis/redis.service';
-import { FlightOffer } from '../interfaces/flight-offers.interface';
-import { FlightPricingResponse } from '../dtos';
-import { FlightOffersPricingResponse } from '../interfaces/flight-offer-pricing.interface';
-import type { TravelClass } from '../interfaces/flight-offers.interface';
+import { FlightOffer } from '../../interfaces/flight-offers.interface';
+import { FlightPricingResponse } from '../../dtos';
+import { FlightOffersPricingResponse } from '../../interfaces/flight-offer-pricing.interface';
+import type { TravelClass } from '../../interfaces/flight-offers.interface';
 
 const DEFAULT_TTL_SECONDS = 15 * 60;
 /** Empty result sets expire quickly so a later admin create is not stuck behind a long negative cache. */

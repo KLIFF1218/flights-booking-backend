@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { PreprocessedFlightOffer } from '../types/flights.types';
-import { FlightCardResponse } from '../interfaces/flight-response.dto';
-import { Itinerary } from '../interfaces/flight-offers.interface';
-import { parseDuration } from '../utils/datetime/duration.util';
-import { toFlightTimeDto } from '../utils/datetime/flight-time.mapper';
+import { PreprocessedFlightOffer } from '../../types/flights.types';
+import { FlightCardResponse } from '../../interfaces/flight-response.dto';
+import { Itinerary } from '../../interfaces/flight-offers.interface';
+import { parseDuration } from '../../utils/datetime/duration.util';
+import { toFlightTimeDto } from '../../utils/datetime/flight-time.mapper';
 
 @Injectable()
 export class FlightOfferMapper {

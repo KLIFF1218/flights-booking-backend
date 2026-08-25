@@ -1,19 +1,19 @@
 import { Injectable } from '@nestjs/common';
 import { FlightStatus } from '@prisma/client';
-import type { FlightOffer } from '../interfaces/flight-offers.interface';
+import type { FlightOffer } from '../../interfaces/flight-offers.interface';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { Logger } from 'nestjs-pino';
-import { FlightsSearchStore, type CachedSearchPassengers } from './flights-cache.service';
-import { flightInstanceInclude } from '../providers/prisma/flight-instance.include';
+import { FlightsSearchStore, type CachedSearchPassengers } from '../cache/flights-cache.service';
+import { flightInstanceInclude } from '../../providers/prisma/flight-instance.include';
 import {
   applyInstanceSchedulesToOffer,
   offerReferencesFlightInstance,
   patchOfferSegmentFromInstance,
-} from '../utils/offer/offer-schedule.util';
+} from '../../utils/offer/offer-schedule.util';
 import {
   isOfferInventoryBookable,
   resolveOfferBookableSeats,
-} from '../utils/offer/offer-inventory.util';
+} from '../../utils/offer/offer-inventory.util';
 
 export type RefreshOffersOptions = {
   passengers?: CachedSearchPassengers;

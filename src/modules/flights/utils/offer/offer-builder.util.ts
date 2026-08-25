@@ -10,7 +10,7 @@ import {
   calculateTotalPrice,
   MissingFareError,
 } from '../pricing/traveler-pricing.util';
-import { mapSegments } from '../../services/flight-segment.mapper';
+import { mapSegments } from '../../services/mappers/flight-segment.mapper';
 import { buildTimeline } from '../datetime/timeline.util';
 import { formatDuration } from '../datetime/time.util';
 import { buildOneWayLeg } from './offer-flight-instances.util';

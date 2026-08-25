@@ -2,8 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { Currency } from '@prisma/client';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { FlightsSearchStore, type CachedSearchContext } from './flights-cache.service';
-import type { FlightOffer } from '../interfaces/flight-offers.interface';
-import type { FlightPricingResponse } from '../dtos';
+import type { FlightOffer } from '../../interfaces/flight-offers.interface';
+import type { FlightPricingResponse } from '../../dtos';
 import type { BookingSnapshot } from 'src/modules/bookings/interfaces/booking-snapshot.interface';
 
 export type ResolvedOfferContext = {

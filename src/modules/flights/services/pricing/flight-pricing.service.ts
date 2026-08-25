@@ -3,7 +3,7 @@ import {
   FLIGHT_PRICING_PROVIDER,
   type FlightPricingOptions,
   type FlightPricingProvider,
-} from '../providers/flight-pricing.provider';
+} from '../../providers/flight-pricing.provider';
 
 @Injectable()
 export class FlightsPricingService {

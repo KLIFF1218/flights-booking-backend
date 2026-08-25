@@ -10,14 +10,14 @@ import { randomUUID } from 'node:crypto';
 import { SearchFlightsDto } from '../dtos';
 import type { FlightsQueryDto } from '../dtos/flights-query.dto';
 
-import { EMPTY_SEARCH_TTL_SECONDS, FlightsSearchStore } from '../services/flights-cache.service';
+import { EMPTY_SEARCH_TTL_SECONDS, FlightsSearchStore } from './cache/flights-cache.service';
 import { MetricsService } from '../../../infra/metrics/metrics.service';
 
 import {
   FLIGHT_SEARCH_PROVIDER,
   type FlightSearchProvider,
 } from '../providers/flight-search.provider';
-import { FlightOfferMapper } from './flight-offer.mapper';
+import { FlightOfferMapper } from './mappers/flight-offer.mapper';
 import {
   FlightSearchCursorPayload,
   PreprocessedFlightOffer,
@@ -46,7 +46,7 @@ import { buildSearchQueryKey } from '../utils/search/search-query-key.util';
 import { validatePassengerCounts } from 'src/shared/booking/passenger-counts.util';
 import { assertValidSearchDirections } from '../utils/search/validate-search-directions.util';
 import { resolveDefaultSearchCurrencyCode } from 'src/shared/currency/payment-defaults.util';
-import { FlightScheduleSyncService } from './flight-schedule-sync.service';
+import { FlightScheduleSyncService } from './schedule/flight-schedule-sync.service';
 
 @Injectable()
 export class FlightsService {

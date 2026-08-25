@@ -1,7 +1,7 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { configureFareCharges } from '../utils/pricing/fare-charges.util';
-import { configureTurnaround } from '../utils/search/turnaround.util';
+import { configureFareCharges } from '../../utils/pricing/fare-charges.util';
+import { configureTurnaround } from '../../utils/search/turnaround.util';
 
 @Injectable()
 export class FlightsConfigBootstrap implements OnModuleInit {

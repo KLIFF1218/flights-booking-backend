@@ -2,19 +2,19 @@ import { Module } from '@nestjs/common';
 import { FlightsService } from './services/flights.service';
 import { FlightsController } from './controllers/flights.controller';
 import { RedisModule } from 'src/infra/redis/redis.module';
-import { FlightsPricingService } from './services/flight-pricing.service';
+import { FlightsPricingService } from './services/pricing/flight-pricing.service';
 import { FlightPricingController } from './controllers/flight-pricing.controller';
-import { FlightsSearchStore } from './services/flights-cache.service';
+import { FlightsSearchStore } from './services/cache/flights-cache.service';
 import { FLIGHT_SEARCH_PROVIDER } from './providers/flight-search.provider';
 import { FLIGHT_PRICING_PROVIDER } from './providers/flight-pricing.provider';
-import { DbFlightsSearchProvider } from './services/db-flight-search.service';
-import { DbPricingProvider } from './services/db-pricing-provider.service';
-import { FlightOfferMapper } from './services/flight-offer.mapper';
-import { CalculateSeatPrice } from './services/calculate-seatprice.service';
-import { CurrencyRatesService } from './services/currency-rates.service';
-import { FlightScheduleSyncService } from './services/flight-schedule-sync.service';
-import { FlightsConfigBootstrap } from './services/flights-config.bootstrap';
-import { BookingSnapshotOfferService } from './services/booking-snapshot-offer.service';
+import { DbFlightsSearchProvider } from './services/search/db-flight-search.service';
+import { DbPricingProvider } from './services/pricing/db-pricing-provider.service';
+import { FlightOfferMapper } from './services/mappers/flight-offer.mapper';
+import { CalculateSeatPrice } from './services/pricing/calculate-seatprice.service';
+import { CurrencyRatesService } from './services/pricing/currency-rates.service';
+import { FlightScheduleSyncService } from './services/schedule/flight-schedule-sync.service';
+import { FlightsConfigBootstrap } from './services/schedule/flights-config.bootstrap';
+import { BookingSnapshotOfferService } from './services/cache/booking-snapshot-offer.service';
 
 @Module({
   imports: [RedisModule],
