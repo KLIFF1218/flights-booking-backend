@@ -155,3 +155,115 @@ payment/
 - `constants/payment-idempotency.constants.ts` — webhook dedupe key
 - `bookings/services/booking-payment-lifecycle.service.ts` — paid/cancel side effects + outbox
 - `infra/outbox/` — relay to RabbitMQ/Kafka
+
+---
+
+## Local walkthrough: Stripe (test mode)
+
+[Stripe test mode](https://docs.stripe.com/test) — recommended for end-to-end checkout locally.
+
+### Prerequisites
+
+```bash
+cp .env.example .env
+docker compose up -d postgres redis rabbitmq minio redpanda
+pnpm prisma migrate deploy
+pnpm seed:demo
+pnpm start:dev
+```
+
+In `.env`:
+
+```env
+PAYMENT_PROVIDER_DEFAULT=STRIPE
+STRIPE_SECRET_KEY=sk_test_...
+APP_URL=http://localhost:3111
+```
+
+MinIO console: http://localhost:9001 (see `.env.example` for credentials).
+
+### Webhook forwarding
+
+```bash
+stripe listen --forward-to localhost:3001/api/v1/webhook/stripe
+```
+
+Copy `whsec_...` → `STRIPE_WEBHOOK_SECRET` in `.env`, restart the API.
+
+### Ticketing dependencies
+
+| Service | Purpose |
+|---------|---------|
+| RabbitMQ | `booking.paid` → ticket job |
+| MinIO | PDF storage |
+| SMTP / Resend | Ticket email |
+
+### UI steps
+
+1. Search JFK → SFO (date within 14 days after `seed:demo`).
+2. Create booking → travelers → seats → checkout.
+3. Stripe Checkout test card: `4242 4242 4242 4242`.
+4. Webhook → **PAID** → RabbitMQ → **TICKETED**.
+5. `/payment/{transactionId}/success` polls until TICKETED.
+
+### Observability
+
+Log flow tag `booking-ticketing`:
+
+`payment.succeeded` → `outbox.sent` → `rabbitmq.received` → `bullmq.enqueued` → `ticket.issued`
+
+```bash
+docker compose logs -f app | grep booking-ticketing
+```
+
+### Stripe troubleshooting
+
+| Symptom | Likely cause |
+|---------|----------------|
+| `Stripe is not configured` | Empty `STRIPE_SECRET_KEY` |
+| Redirect OK, status `PAYMENT_PENDING` | No `stripe listen` or wrong `STRIPE_WEBHOOK_SECRET` |
+| PAID but no ticket | RabbitMQ / MinIO / `S3_*` — check `GET /health/ready` |
+| No email | No SMTP/Resend — PDF may still be in MinIO |
+
+---
+
+## Local walkthrough: YooKassa (sandbox)
+
+[YooKassa test shop docs](https://yookassa.ru/developers/payment-acceptance/testing-and-going-live/testing).
+
+### Credentials
+
+```env
+PAYMENT_PROVIDER_DEFAULT=YOOKASSA
+YOOKASSA_SHOP_ID=...
+YOOKASSA_API_KEY=...
+YOOKASSA_CAPTURE=false
+APP_URL=http://localhost:3111
+```
+
+Search and checkout must use **RUB**. USD offer + YooKassa → `400`.
+
+### Public webhook (required)
+
+YooKassa sends webhooks from fixed IPs to an **HTTPS** URL:
+
+```bash
+ngrok http 3001
+```
+
+Register in the merchant dashboard:
+
+```text
+https://<subdomain>.ngrok-free.app/api/v1/webhook/yookassa
+```
+
+The backend verifies source IP (`verifyWebhookIp`).
+
+### YooKassa troubleshooting
+
+| Symptom | Likely cause |
+|---------|----------------|
+| `YooKassa is not configured` | Empty `YOOKASSA_SHOP_ID` / `YOOKASSA_API_KEY` |
+| 404 on return URL | `APP_URL` must point to the frontend, not the API |
+| `Unauthorized webhook source` | Request not from YooKassa IP range |
+| `Invalid webhook payload` on `payment.canceled` | Stale payment without metadata — not your successful checkout |
