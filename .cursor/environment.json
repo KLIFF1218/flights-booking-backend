@@ -1,0 +1,13 @@
+{
+  "name": "MaxAirline Backend",
+  "user": "ubuntu",
+  "install": "bash .cursor/install.sh",
+  "start": "bash .cursor/start.sh",
+  "terminals": [
+    {
+      "name": "api",
+      "command": "cd /workspace && pnpm start:dev"
+    }
+  ],
+  "ports": [3001, 9001, 15672]
+}
