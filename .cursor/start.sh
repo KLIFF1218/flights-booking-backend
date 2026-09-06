@@ -27,8 +27,12 @@ sudo docker info >/dev/null 2>&1 || { echo "Docker daemon failed to start" >&2; 
 
 # ---------------------------------------------------------------------------
 # 2. Infra containers
+#    Recreate volumes on each boot so Postgres/RabbitMQ credentials always
+#    match the current .env (those images only honor credentials on the first
+#    init of an empty data volume). Infra is ephemeral and reseeded below.
 # ---------------------------------------------------------------------------
-log "Starting infra containers"
+log "Recreating infra containers"
+sudo docker compose down -v --remove-orphans || true
 sudo docker compose up -d postgres redis rabbitmq minio redpanda
 
 # ---------------------------------------------------------------------------

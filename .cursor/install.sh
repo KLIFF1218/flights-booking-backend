@@ -2,8 +2,8 @@
 # Cloud Agent install phase: durable, idempotent repository setup.
 # - Installs Docker Engine (used to run local infra: Postgres/Redis/RabbitMQ/MinIO/Redpanda).
 # - Configures the fuse-overlayfs storage driver, required for nested-VM Docker.
-# - Installs Node dependencies and generates the Prisma client.
 # - Creates a local dev .env with throwaway credentials when one is not present.
+# - Installs Node dependencies and generates the Prisma client.
 # Safe to run repeatedly; each step is guarded.
 set -euo pipefail
 
@@ -40,17 +40,8 @@ if [ ! -f /etc/docker/daemon.json ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 3. Node dependencies + Prisma client
-# ---------------------------------------------------------------------------
-log "Installing Node dependencies"
-corepack enable >/dev/null 2>&1 || true
-pnpm install --frozen-lockfile
-
-log "Generating Prisma client"
-pnpm exec prisma generate
-
-# ---------------------------------------------------------------------------
-# 4. Local dev environment file (never overwrite an existing one)
+# 3. Local dev environment file (never overwrite an existing one).
+#    Must exist before `prisma generate`, which reads DATABASE_URL via dotenv.
 # ---------------------------------------------------------------------------
 if [ ! -f .env ]; then
   log "Creating local dev .env (random throwaway credentials)"
@@ -155,5 +146,15 @@ GRAFANA_ADMIN_USER=admin
 GRAFANA_ADMIN_PASSWORD=admin
 EOF
 fi
+
+# ---------------------------------------------------------------------------
+# 4. Node dependencies + Prisma client
+# ---------------------------------------------------------------------------
+log "Installing Node dependencies"
+corepack enable >/dev/null 2>&1 || true
+pnpm install --frozen-lockfile
+
+log "Generating Prisma client"
+pnpm exec prisma generate
 
 log "install.sh complete"
