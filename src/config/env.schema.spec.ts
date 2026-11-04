@@ -8,6 +8,8 @@ describe('env.schema', () => {
     COOKIES_DOMAIN: 'localhost',
     DATABASE_URL: 'postgresql://admin:pass@localhost:5433/maxairline',
     REDIS_URL: 'redis://:pass@localhost:6379',
+    REDIS_HOST: 'localhost',
+    REDIS_PORT: '6379',
     JWT_SECRET: 'dev-secret',
     RABBITMQ_URI: 'amqp://admin:pass@localhost:5672',
     RABBITMQ_EXCHANGE: 'booking.events',
@@ -20,7 +22,24 @@ describe('env.schema', () => {
   };
 
   it('accepts a minimal development configuration', () => {
-    expect(parseEnvConfig(baseEnv).HTTP_PORT).toBe(3001);
+    const parsed = parseEnvConfig(baseEnv);
+    expect(parsed.HTTP_PORT).toBe(3001);
+    expect(parsed.REDIS_HOST).toBe('localhost');
+    expect(parsed.REDIS_PORT).toBe(6379);
+  });
+
+  it('requires REDIS_HOST and REDIS_PORT used by the Redis client', () => {
+    const withoutRedisClient = { ...baseEnv };
+    delete withoutRedisClient.REDIS_HOST;
+    delete withoutRedisClient.REDIS_PORT;
+
+    expect(() => parseEnvConfig(withoutRedisClient)).toThrow(/REDIS_HOST/);
+    expect(() => parseEnvConfig({ ...baseEnv, REDIS_PORT: '0' })).toThrow(/REDIS_PORT/);
+  });
+
+  it('allows omitting REDIS_PASSWORD', () => {
+    expect(parseEnvConfig(baseEnv).REDIS_PASSWORD).toBeUndefined();
+    expect(parseEnvConfig({ ...baseEnv, REDIS_PASSWORD: 'secret' }).REDIS_PASSWORD).toBe('secret');
   });
 
   it('requires METRICS_AUTH_TOKEN in production', () => {

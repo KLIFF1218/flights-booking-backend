@@ -279,9 +279,9 @@ Option A also exposes Grafana (`http://localhost:3002`), Prometheus (`http://loc
 
 Copy [`.env.example`](.env.example) to `.env` and replace every `YOUR_*_HERE` placeholder (and empty payment keys) before starting.
 
-**Validated by NestJS** (`src/config/env.schema.ts` at startup): `NODE_ENV`, `HTTP_PORT`, `HTTP_CORS`, `COOKIES_DOMAIN`, `DATABASE_URL`, `REDIS_URL`, `RABBITMQ_URI`, `RABBITMQ_EXCHANGE`, `RABBITMQ_QUEUE`, `RABBITMQ_DLX`, `S3_*`, `QUEUE_PREFIX`, `JWT_*`, `KAFKA_*`, `PAYMENT_PROVIDER_DEFAULT`, optional `STRIPE_*` / `YOOKASSA_*`, `RESEND_API_KEY`, `MAIL_FROM`, `APP_URL`, `VK_CLIENT_*`, `SWAGGER_*`, `METRICS_AUTH_TOKEN`, `SENTRY_DSN`, `OTEL_EXPORTER_OTLP_ENDPOINT`.
+**Validated by NestJS** (`src/config/env.schema.ts` at startup): `NODE_ENV`, `HTTP_PORT`, `HTTP_CORS`, `COOKIES_DOMAIN`, `DATABASE_URL`, `REDIS_URL`, `REDIS_HOST`, `REDIS_PORT`, optional `REDIS_PASSWORD`, `RABBITMQ_URI`, `RABBITMQ_EXCHANGE`, `RABBITMQ_QUEUE`, `RABBITMQ_DLX`, `S3_*`, `QUEUE_PREFIX`, `JWT_*`, `KAFKA_*`, `PAYMENT_PROVIDER_DEFAULT`, optional `STRIPE_*` / `YOOKASSA_*`, `RESEND_API_KEY`, `MAIL_FROM`, `APP_URL`, `VK_CLIENT_*`, `SWAGGER_*`, `METRICS_AUTH_TOKEN`, `SENTRY_DSN`, `OTEL_EXPORTER_OTLP_ENDPOINT`.
 
-**Read by application code, not Zod:** `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` (Redis/BullMQ via `redis.config.ts`); `FX_*`, `FARE_TAX_*`, `BOOKING_SERVICE_FEE`, `MIN_*_TURNAROUND_MINUTES`; optional `NOTIFICATION_SSE_HEARTBEAT_MS`.
+**Read by application code, not Zod:** `FX_*`, `FARE_TAX_*`, `BOOKING_SERVICE_FEE`, `MIN_*_TURNAROUND_MINUTES`; optional `NOTIFICATION_SSE_HEARTBEAT_MS`. Redis and BullMQ connect with `REDIS_HOST`, `REDIS_PORT`, and optional `REDIS_PASSWORD` (`redis.config.ts`). Keep those values aligned with `REDIS_URL`.
 
 **Read by Sentry instrumentation** (`src/instrument.ts`, not Zod): `SENTRY_SEND_DEFAULT_PII`, `SENTRY_TRACES_SAMPLE_RATE`, `SENTRY_DEBUG`.
 

@@ -17,6 +17,9 @@ const envSchema = z
 
     DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
     REDIS_URL: z.string().min(1, 'REDIS_URL is required'),
+    REDIS_HOST: z.string().min(1, 'REDIS_HOST is required'),
+    REDIS_PORT: z.coerce.number().int().min(1).max(65535),
+    REDIS_PASSWORD: z.string().optional(),
     REDIS_TLS: booleanString.optional(),
 
     JWT_SECRET: z.string().optional(),
