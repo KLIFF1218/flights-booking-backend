@@ -369,7 +369,6 @@ No load-test benchmarks are currently claimed.
 - Kafka in production compose or feature-flag optional consumers
 - OpenTelemetry enabled by default in compose; rate-limit metrics dashboards
 - Remove or implement dormant enums (`PaymentProvider.STARS`, unused OAuth providers)
-- Wire `QUEUE_PREFIX` into BullMQ root config (env exists, not applied in `AppModule`)
 
 ---
 
