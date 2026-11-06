@@ -3,7 +3,7 @@ import { Logger } from 'nestjs-pino';
 import { MetricsService } from 'src/infra/metrics/metrics.service';
 import { runSafely } from 'src/common/utils/safe-metrics.util';
 import { BookingFlowStage, logBookingFlowStage } from 'src/common/logging/booking-flow.logger';
-import { BookingPaymentLifecycleService } from '../../bookings/services/booking-payment-lifecycle.service';
+import { BookingPaymentLifecycleService } from '../../bookings/services/checkout/booking-payment-lifecycle.service';
 import { requiresLateSuccessReconciliation } from '../domain/payment-webhook.policy';
 import { WEBHOOK_PROCESSING_OUTCOME } from '../constants/payment-webhook.constants';
 import { finalizeTransactionToSucceed } from '../utils/transaction-state.util';

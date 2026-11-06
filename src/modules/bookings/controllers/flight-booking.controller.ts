@@ -17,17 +17,17 @@ import {
   ApiParam,
   ApiHeader,
 } from '@nestjs/swagger';
-import { BookingWorkflowService } from '../services/booking-workflow.service';
-import { BookingsService } from '../services/bookings.service';
-import { BookingPaymentService } from '../services/booking-payment.service';
-import { CreateFlightOrderInputDto } from '../dtos/create-flight-order.input.dto';
-import { UserBookingsListDto, BookingDetailDto } from '../dtos/user-bookings-list.dto';
-import { UserBookingsQueryDto } from '../dtos/user-bookings-query.dto';
+import { BookingWorkflowService } from '../services/booking/booking-workflow.service';
+import { BookingsService } from '../services/booking/bookings.service';
+import { BookingPaymentService } from '../services/checkout/booking-payment.service';
+import { CreateFlightOrderInputDto } from '../dtos/checkout/create-flight-order.input.dto';
+import { UserBookingsListDto, BookingDetailDto } from '../dtos/booking/user-bookings-list.dto';
+import { UserBookingsQueryDto } from '../dtos/booking/user-bookings-query.dto';
 import { Authorized, Protected, Roles } from 'src/common/decorators';
-import { AddTravelersDto } from '../dtos/add-travelers.dto';
-import { AddSeatsDto, AssignSeatsBodyDto } from '../dtos/add-seats.dto';
-import { BookingCheckoutResponseDto } from '../dtos/booking-checkout.response.dto';
-import { BookingPaymentResumeResponseDto } from '../dtos/booking-payment-resume.response.dto';
+import { AddTravelersDto } from '../dtos/booking/add-travelers.dto';
+import { AddSeatsDto, AssignSeatsBodyDto } from '../dtos/booking/add-seats.dto';
+import { BookingCheckoutResponseDto } from '../dtos/checkout/booking-checkout.response.dto';
+import { BookingPaymentResumeResponseDto } from '../dtos/checkout/booking-payment-resume.response.dto';
 import { Role } from '@prisma/client';
 import {
   ApiBadRequestError,

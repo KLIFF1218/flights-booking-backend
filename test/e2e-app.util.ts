@@ -4,7 +4,7 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { RateLimitGuard } from 'src/common/guards/rate-limit.guard';
 import { RedisService } from 'src/infra/redis/redis.service';
-import { AuthEmailService } from 'src/modules/auth/services/auth-email.service';
+import { AuthEmailService } from 'src/modules/auth/services/email/auth-email.service';
 import { UsersE2eModule } from './users-e2e.module';
 import { MemoryRedisService } from './memory-redis.service';
 

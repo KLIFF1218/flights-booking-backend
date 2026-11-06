@@ -11,7 +11,7 @@ import {
   mapAdminFlightToDto,
   type AdminFlightInstanceRecord,
 } from './mappers/admin-flight.mapper';
-import { FlightScheduleSyncService } from 'src/modules/flights/services/flight-schedule-sync.service';
+import { FlightScheduleSyncService } from 'src/modules/flights/services/schedule/flight-schedule-sync.service';
 import { OutboxService } from 'src/infra/outbox/outbox.service';
 import {
   buildAdminFlightsStatsWhere,

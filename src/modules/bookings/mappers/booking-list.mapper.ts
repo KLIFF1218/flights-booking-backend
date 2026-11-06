@@ -1,8 +1,8 @@
 import type { BookingSnapshot } from '../interfaces/booking-snapshot.interface';
 import type { BookingTicketDto } from '../types/booking-ticket';
 import type { BookingListItemEntity } from '../types/booking-list-item';
-import type { BookingListItemDto } from '../dtos/booking-list-item.dto';
-import { mapOfferToBookingRoutes } from '../utils/booking-offer-routes.util';
+import type { BookingListItemDto } from '../dtos/booking/booking-list-item.dto';
+import { mapOfferToBookingRoutes } from '../utils/flight/booking-offer-routes.util';
 import type { FlightStatus } from '@prisma/client';
 
 const emptyFlight = {

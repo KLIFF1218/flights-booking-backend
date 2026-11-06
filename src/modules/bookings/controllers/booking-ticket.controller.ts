@@ -9,8 +9,8 @@ import {
 } from '@nestjs/swagger';
 import { Authorized, Protected, Roles } from 'src/common/decorators';
 import { Role } from '@prisma/client';
-import { BookingTicketService } from '../services/booking-ticket.service';
-import { BookingTicketItemDto } from '../dtos/booking-ticket-response.dto';
+import { BookingTicketService } from '../services/tickets/booking-ticket.service';
+import { BookingTicketItemDto } from '../dtos/ticket/booking-ticket-response.dto';
 import { ApiNotFoundError, ApiUserAuthErrors } from 'src/common/swagger/api-responses.decorator';
 
 @ApiTags('Booking Tickets')

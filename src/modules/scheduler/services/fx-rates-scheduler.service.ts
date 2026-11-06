@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Logger } from 'nestjs-pino';
-import { CurrencyRatesService } from '../../flights/services/currency-rates.service';
+import { CurrencyRatesService } from '../../flights/services/pricing/currency-rates.service';
 
 @Injectable()
 export class FxRatesSchedulerService {

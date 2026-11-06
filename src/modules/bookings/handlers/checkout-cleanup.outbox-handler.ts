@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Logger } from 'nestjs-pino';
-import { FlightsSearchStore } from 'src/modules/flights/services/flights-cache.service';
-import { BookingsCacheService } from '../services/bookings-cache.service';
+import { FlightsSearchStore } from 'src/modules/flights/services/cache/flights-cache.service';
+import { BookingsCacheService } from '../services/lifecycle/bookings-cache.service';
 
 export type CheckoutCleanupOutboxPayload = {
   bookingId: string;

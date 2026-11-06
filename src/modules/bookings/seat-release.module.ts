@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { SeatReleaseService } from './services/seat-release.service';
+import { SeatReleaseService } from './services/seats/seat-release.service';
 import { BookingMetricsModule } from './metrics/booking-metrics.module';
 
 @Module({

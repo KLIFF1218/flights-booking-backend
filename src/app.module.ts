@@ -43,6 +43,7 @@ import { LifecycleModule } from './infra/lifecycle/lifecycle.module';
 import { validateEnv } from './config/env.validation';
 import { AppValidationPipe } from './common/pipes/app-validation.pipe';
 import { getLoggingConfig } from './config/logger.config';
+import { getBullmqConfig } from './config/bullmq.config';
 import { redisConfig } from './config/redis.config';
 
 @Module({
@@ -85,6 +86,7 @@ import { redisConfig } from './config/redis.config';
           maxRetriesPerRequest: null,
           tls: config.get('REDIS_TLS') === 'true' ? {} : undefined,
         },
+        prefix: getBullmqConfig(config).prefix,
       }),
     }),
 

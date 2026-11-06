@@ -3,7 +3,7 @@ import type { FlightPricingResponse } from '../../dtos/flight-pricing.response.d
 import { FlightStatus } from '@prisma/client';
 import type { FlightOffer } from '../../interfaces/flight-offers.interface';
 import type { FlightInstanceWithRelations } from '../../providers/prisma/flight-instance.type';
-import { mapSegments } from '../../services/flight-segment.mapper';
+import { mapSegments } from '../../services/mappers/flight-segment.mapper';
 import { calculateDoorToDoorDurationMinutes } from '../datetime/duration.util';
 import { formatDuration } from '../datetime/time.util';
 

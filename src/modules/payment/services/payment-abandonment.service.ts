@@ -3,7 +3,7 @@ import { BookingStatus, PaymentProvider, Prisma, TransactionStatus } from '@pris
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { Logger } from 'nestjs-pino';
 import { PaymentProviderService } from './payment-provider.service';
-import { BookingPaymentLifecycleService } from '../../bookings/services/booking-payment-lifecycle.service';
+import { BookingPaymentLifecycleService } from '../../bookings/services/checkout/booking-payment-lifecycle.service';
 import { BookingMetricsService } from '../../bookings/metrics/booking-metrics.service';
 import {
   cancelTransactionIfAbandonable,

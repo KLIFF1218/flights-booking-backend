@@ -4,7 +4,7 @@ import { Logger } from 'nestjs-pino';
 import { OutboxService } from 'src/infra/outbox/outbox.service';
 import { MetricsService } from 'src/infra/metrics/metrics.service';
 import { runSafely } from 'src/common/utils/safe-metrics.util';
-import { BookingPaymentLifecycleService } from '../../bookings/services/booking-payment-lifecycle.service';
+import { BookingPaymentLifecycleService } from '../../bookings/services/checkout/booking-payment-lifecycle.service';
 import { BOOKING_PAYMENT_SEAT_RELEASE_REASON } from '../../bookings/constants/booking-seat-lifecycle.constants';
 import {
   PAYMENT_FAILED_OUTBOX_TOPIC,

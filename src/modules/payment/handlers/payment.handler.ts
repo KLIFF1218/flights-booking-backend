@@ -7,7 +7,7 @@ import { IdempotencyService } from '../services/idempotency.service';
 import { MetricsService } from 'src/infra/metrics/metrics.service';
 import { runSafely } from 'src/common/utils/safe-metrics.util';
 import { finalizeTransactionIfPending } from '../utils/transaction-state.util';
-import { BookingPaymentLifecycleService } from '../../bookings/services/booking-payment-lifecycle.service';
+import { BookingPaymentLifecycleService } from '../../bookings/services/checkout/booking-payment-lifecycle.service';
 import { PaymentProviderService } from '../services/payment-provider.service';
 import {
   buildPaymentWebhookIdempotencyKey,

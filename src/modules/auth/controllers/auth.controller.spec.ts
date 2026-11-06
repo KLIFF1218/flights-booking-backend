@@ -1,10 +1,10 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
-import { AuthService } from '../services/auth.service';
-import { SocialService } from '../services/social.service';
-import { EmailVerificationService } from '../services/email-verification.service';
-import { PasswordLifecycleService } from '../services/password-lifecycle.service';
-import { SessionsService } from '../services/sessions.service';
+import { AuthService } from '../services/auth/auth.service';
+import { SocialService } from '../services/social/social.service';
+import { EmailVerificationService } from '../services/email/email-verification.service';
+import { PasswordLifecycleService } from '../services/password/password-lifecycle.service';
+import { SessionsService } from '../services/session/sessions.service';
 
 describe('AuthController', () => {
   let controller: AuthController;

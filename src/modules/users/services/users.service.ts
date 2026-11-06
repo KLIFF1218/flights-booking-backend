@@ -9,7 +9,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { UpdateSettingsDto } from '../dtos/update-settings.dto';
 import { UpdateProfileDto } from '../dtos/update-profile.dto';
-import { EmailVerificationService } from '../../auth/services/email-verification.service';
+import { EmailVerificationService } from '../../auth/services/email/email-verification.service';
 
 const userPublicSelect = {
   id: true,

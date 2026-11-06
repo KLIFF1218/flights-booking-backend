@@ -1,7 +1,7 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { ApiTags, ApiBody, ApiOperation, ApiOkResponse } from '@nestjs/swagger';
 import { RateLimit, RATE_LIMIT_PRESETS } from 'src/common/decorators';
-import { FlightsPricingService } from '../services/flight-pricing.service';
+import { FlightsPricingService } from '../services/pricing/flight-pricing.service';
 import { FlightPricingRequestDto } from '../dtos/flight-pricing.request.dto';
 import {
   FlightPricingResponseDto,

@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { SeatStatus, SeatType, TravelClass } from '@prisma/client';
 
 export class SeatMapDto {
@@ -18,6 +18,14 @@ export class SeatMapDto {
   @IsString()
   @IsNotEmpty()
   offerId!: string;
+
+  @ApiPropertyOptional({
+    description: 'Active booking id — restores offer from snapshot when search cache expired',
+    example: 'clu3y9ab0002qz0q2yex8w9s0',
+  })
+  @IsOptional()
+  @IsString()
+  bookingId?: string;
 }
 
 export enum SeatFeature {

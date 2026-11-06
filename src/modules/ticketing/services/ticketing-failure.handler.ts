@@ -4,11 +4,7 @@ import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { OutboxService } from 'src/infra/outbox/outbox.service';
 import { MailService } from 'src/infra/mail/mail.service';
 import { BookingMetricsService } from 'src/modules/bookings/metrics/booking-metrics.service';
-import {
-  isTicketingUnrecoverableError,
-  TicketingErrorCode,
-  TicketingUnrecoverableError,
-} from '../errors/ticketing.errors';
+import { isTicketingUnrecoverableError, TicketingErrorCode } from '../errors/ticketing.errors';
 import { escalateTicketingFailure } from '../utils/ticketing-failure-escalation.util';
 
 @Injectable()

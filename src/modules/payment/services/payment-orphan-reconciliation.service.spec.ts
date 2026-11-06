@@ -1,4 +1,4 @@
-import { BookingStatus, PaymentProvider, TransactionStatus } from '@prisma/client';
+import { PaymentProvider, TransactionStatus } from '@prisma/client';
 import { PaymentOrphanReconciliationService } from './payment-orphan-reconciliation.service';
 import { createBookingMetricsMock } from '../../bookings/metrics/booking-metrics.mock';
 

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { BookingStatus } from '@prisma/client';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { MailService } from 'src/infra/mail/mail.service';
-import { BookingsCacheService } from 'src/modules/bookings/services/bookings-cache.service';
+import { BookingsCacheService } from 'src/modules/bookings/services/lifecycle/bookings-cache.service';
 import { Logger } from 'nestjs-pino';
 import { TicketIssuerService } from '../services/ticket-issuer.service';
 import type { GeneratedTicket } from '../types/ticket.types';
@@ -10,7 +10,7 @@ import type { BookingSnapshot } from 'src/modules/bookings/interfaces/booking-sn
 import {
   createTravelerPricingResolver,
   sortTravelersForPricingMatch,
-} from 'src/modules/bookings/utils/resolve-traveler-pricing.util';
+} from 'src/modules/bookings/utils/travelers/resolve-traveler-pricing.util';
 import { allocateSeatSurcharge } from '../utils/eticket-document.util';
 import { BookingFlowStage, logBookingFlowStage } from 'src/common/logging/booking-flow.logger';
 import { TicketingErrorCode, TicketingUnrecoverableError } from '../errors/ticketing.errors';

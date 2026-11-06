@@ -1,7 +1,7 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import { Logger } from 'nestjs-pino';
 import { FxRatesSchedulerService } from './fx-rates-scheduler.service';
-import { CurrencyRatesService } from '../../flights/services/currency-rates.service';
+import { CurrencyRatesService } from '../../flights/services/pricing/currency-rates.service';
 
 describe('FxRatesSchedulerService', () => {
   let service: FxRatesSchedulerService;

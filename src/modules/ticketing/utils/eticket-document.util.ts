@@ -6,7 +6,7 @@ import type { BookingSnapshot } from 'src/modules/bookings/interfaces/booking-sn
 import {
   extractItinerariesFromSnapshot,
   extractRouteFromSnapshot,
-} from 'src/modules/bookings/utils/booking-snapshot.util';
+} from 'src/modules/bookings/utils/snapshot/booking-snapshot.util';
 
 const PASSENGER_TYPE_LABELS: Record<PassengerType, string> = {
   ADULT: 'Adult',

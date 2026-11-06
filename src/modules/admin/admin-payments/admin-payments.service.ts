@@ -3,11 +3,11 @@ import { BookingStatus, EnumTransport, PaymentProvider, TransactionStatus } from
 import { PaymentStatusEnum } from 'nestjs-yookassa';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { YookassaProvider } from 'src/modules/payment/providers/yoomoney/yoomoney.service';
-import { BookingsCacheService } from 'src/modules/bookings/services/bookings-cache.service';
+import { BookingsCacheService } from 'src/modules/bookings/services/lifecycle/bookings-cache.service';
 import { OutboxService } from 'src/infra/outbox/outbox.service';
-import { SeatReleaseService } from 'src/modules/bookings/services/seat-release.service';
+import { SeatReleaseService } from 'src/modules/bookings/services/seats/seat-release.service';
 import { BookingSnapshot } from 'src/modules/bookings/interfaces/booking-snapshot.interface';
-import { releaseFlightInstanceInventoryForBooking } from 'src/modules/bookings/utils/booking-inventory.util';
+import { releaseFlightInstanceInventoryForBooking } from 'src/modules/bookings/utils/inventory/booking-inventory.util';
 import { MetricsService } from 'src/infra/metrics/metrics.service';
 import { runSafely } from 'src/common/utils/safe-metrics.util';
 import {
