@@ -1,6 +1,6 @@
 import { FlightOfferMapper } from './flight-offer.mapper';
-import { preprocessOffers } from '../utils/search/preprocess-offers.util';
-import type { FlightOffer } from '../interfaces/flight-offers.interface';
+import { preprocessOffers } from '../../utils/search/preprocess-offers.util';
+import type { FlightOffer } from '../../interfaces/flight-offers.interface';
 
 function buildOffer(): FlightOffer {
   return {

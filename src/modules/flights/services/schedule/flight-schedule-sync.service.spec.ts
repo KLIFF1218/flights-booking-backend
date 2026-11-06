@@ -3,8 +3,8 @@ import { FlightStatus } from '@prisma/client';
 import { Logger } from 'nestjs-pino';
 import { FlightScheduleSyncService } from './flight-schedule-sync.service';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
-import { FlightsSearchStore } from './flights-cache.service';
-import { buildCachedPricingOffer, buildMockFlightInstance } from '../flights-test.fixtures';
+import { FlightsSearchStore } from '../cache/flights-cache.service';
+import { buildCachedPricingOffer, buildMockFlightInstance } from '../../flights-test.fixtures';
 
 describe('FlightScheduleSyncService', () => {
   let service: FlightScheduleSyncService;

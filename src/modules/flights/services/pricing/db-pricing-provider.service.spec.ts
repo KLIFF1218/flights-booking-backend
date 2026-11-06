@@ -3,12 +3,12 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { Currency, TravelClass } from '@prisma/client';
 import { Logger } from 'nestjs-pino';
 import { DbPricingProvider } from './db-pricing-provider.service';
-import { FlightsSearchStore } from './flights-cache.service';
+import { FlightsSearchStore } from '../cache/flights-cache.service';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { CalculateSeatPrice } from './calculate-seatprice.service';
 import { CurrencyRatesService } from './currency-rates.service';
-import { BookingSnapshotOfferService } from './booking-snapshot-offer.service';
-import { buildCachedPricingOffer, buildMockFlightInstance } from '../flights-test.fixtures';
+import { BookingSnapshotOfferService } from '../cache/booking-snapshot-offer.service';
+import { buildCachedPricingOffer, buildMockFlightInstance } from '../../flights-test.fixtures';
 
 describe('DbPricingProvider', () => {
   let service: DbPricingProvider;
