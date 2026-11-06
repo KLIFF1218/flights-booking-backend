@@ -3,6 +3,7 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Currency, SeatType, TravelClass } from '@prisma/client';
 import { SeatMapsService } from './seatmap.service';
 import { FlightsSearchStore } from '../../flights/services/cache/flights-cache.service';
+import { BookingSnapshotOfferService } from '../../flights/services/cache/booking-snapshot-offer.service';
 import { PrismaService } from 'src/infra/db/prisma/prisma.service';
 import { MetricsService } from 'src/infra/metrics/metrics.service';
 import { SeatFeature } from '../dtos/seatmap.dto';
@@ -93,6 +94,21 @@ describe('SeatMapsService', () => {
     getLastPricing: jest.fn(),
     saveSeatMap: jest.fn(),
   };
+  const bookingSnapshotOffer = {
+    resolveOfferContext: jest.fn(async () => {
+      const offer = await searchStore.getOffer();
+      if (!offer) {
+        return null;
+      }
+
+      return {
+        offer,
+        searchContext: null,
+        offerCurrency: offer.currencyCode ?? offer.price.currency,
+        pricingHint: null,
+      };
+    }),
+  };
   const prisma = {
     flightInstance: {
       findMany: jest.fn(),
@@ -114,6 +130,7 @@ describe('SeatMapsService', () => {
       providers: [
         SeatMapsService,
         { provide: FlightsSearchStore, useValue: searchStore },
+        { provide: BookingSnapshotOfferService, useValue: bookingSnapshotOffer },
         { provide: PrismaService, useValue: prisma },
         { provide: MetricsService, useValue: metrics },
       ],
